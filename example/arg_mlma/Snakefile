@@ -1,0 +1,473 @@
+# This file is part of the ARG-Needle genealogical inference and
+# analysis software suite.
+# Copyright (C) 2023 ARG-Needle Developers.
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+"""
+This snakefile runs two independent processes on pre-computed ARGs.
+
+Genealogy-wide association (GeWAS) is conducted via the following steps:
+1. Run BOLT on full set to get calibration factor.
+   If you already have the calibration factor, bolt_nocov_imputation can be skipped.
+2. Run BOLT LOCO to get betas.
+   If you already have beta estimates, bolt_nocov_loco can be skipped.
+3. Compute phenotype residuals 
+4. Run GeWAS on inferred ARGs
+
+To obtain a multiple-testing threshold for the GeWAS, we run the following steps:
+1. Run a linear-regression GeWAS on a single, random phenotype, genealogy-wide.
+2. Run association studies for 1000 random phenotypes on a single ARG chunk and 
+   compute a 95% confidence interval for the testing threshold.
+3. Extrapolate to the whole genome using the genealogy-wide study.
+"""
+
+###
+# THIS SECTION CONTAINS HARD LINKS TO DATA DIRECTORIES AND BINARIES
+
+###
+# SAMPLE, ARG_IDS, SAMPLING_RATES needed for all analyses
+
+# samples in the SHAPEIT2 (Oxford) format: 
+#   ID_1 ID_2 missing
+#   0 0 0
+#   1234 1234 0
+#   5678 5678 0
+SAMPLE = "files/example.sample"
+
+# IDs in the format chr1.* and mapping to .argn paths
+# Exclude the .argn extension
+# Note: for dealing with many chunks, you can write custom Python code in here that
+# creates the correct array, e.g. using os / glob
+ARG_IDS = [
+    "chr1.chunk1",
+    "chr1.chunk2",
+    "chr2.chunk1",
+    "chr2.chunk2",
+    "chr3.chunk1",
+    "chr3.chunk2",
+    "chr4.chunk1",
+    "chr4.chunk2",
+    "chr5.chunk1",
+    "chr5.chunk2",
+]
+ARG_DIRECTORY = "files"
+def get_arg_path(wildcards):
+    """Map wildcards.ARG_ID to ARG .argn file"""
+    return f"{ARG_DIRECTORY}/{wildcards.ARG_ID}.argn"
+
+# Sampling rate for GeWAS.
+# UKB analysis used 1e-5 and 1e-3 for follow-up, but other rates can be
+# considered.
+# Higher rate means more tests, requiring more time/memory/disk space, and a more
+# stringent multiple-testing threshold.
+SAMPLING_RATES = ['1e-5', '1e-6']
+
+# Number of jobs and seeds per job for null model analysis.
+N_JOBS = 2            # can use 2 jobs for testing
+# N_JOBS = 100        # should use 100 jobs in real applications
+N_SEEDS_PER_JOB = 10  # keep at 10, should definitely not exceed 1000
+
+NULL_MODEL_MIN_MAFS = [0.0, 0.001, 0.01, 0.1]
+
+###
+# If you are only seeking to obtain genome-wide significance thresholds, you can
+# skip defining the below. These are necessary for the ARG-MLMA pipeline.
+
+# Names + paths of all the phenotypes you want to include
+PHENOTYPES = []
+def get_phenotype_path(wildcards):
+    return f"path/to/phenotype/for/{wildcards.phenotype}"
+
+def get_covars_path(wildcards):
+    return f"path/to/covariates/for/{wildcards.phenotype}"
+
+# We used 1000 genomes EUR LD-scores in our analyses.
+# East Asian scores are available from https://alkesgroup.broadinstitute.org/LDSCORE/
+LD_SCORES = ""
+
+# Prefix for array data .bed files
+ARRAY_DATA_PREFIX = ""
+
+# Prefix for imputed data .bgen files
+IMPUTED_DATA_PREFIX = ""
+
+# PLINK2 binary
+PLINK = ""
+
+# BOLT binary
+BOLT = ""
+
+rule all:
+    """
+    This process will output a 
+        GeWAS_results/{phenotype}/{ARG_ID}_mu{sampling_rate}.{ext}.gz
+    file for the cross-product of all wildcard arguments
+    """
+    input:
+        # The GeWAS association pipeline
+        expand("GeWAS_results/{phenotype}/{ARG_ID}_mu{sampling_rate}.{ext}.gz",
+            ARG_ID=ARG_IDS,
+            phenotype=PHENOTYPES,
+            sampling_rate=SAMPLING_RATES,
+            ext=['haps', 'tab']),
+        # Null model simulations for genealogy-wide multiple-testing thresholds
+        expand("GeWAS_results/mu{sampling_rate}_thresholds.tsv",
+            sampling_rate=SAMPLING_RATES)
+
+rule make_phenotype:
+    """
+    Take a raw phenotype and regress out covariates and PCs,
+    save result to a plink-readable .pheno file.
+    """
+    input:
+        phenotype = get_phenotype_path,
+        covars = get_covars_path,        
+        sample = SAMPLE
+    output:
+        phenotype = 'GeWAS_results/{phenotypes}/{phenotype}.pheno',
+    shell:
+        """
+        I've not included a script here, this will be platform/dataset/phenotype-specific.
+        """
+
+rule bolt_nocov_imputation:
+    """
+    Run BOLT on imputed data with no covariates
+    """
+    input:
+        bed = expand(ARRAY_DATA_PREFIX + "{chrom}.bed", chrom=range(1, 23)),
+        bim = expand(ARRAY_DATA_PREFIX + "{chrom}.bim", chrom=range(1, 23)),
+        fam = ARRAY_DATA_PREFIX + "1.fam",  # This should be the same for all chromosomes anyway
+        bgen = expand(IMPUTED_DATA_PREFIX + "{chrom}_v3.bgen", chrom=range(1, 23)),
+        sample = SAMPLE,
+        phenotype = rules.make_phenotype.output.phenotype
+    output:
+        stats = "GeWAS_results/{phenotype}/geno.stats.gz",
+        stats_bgen_snps = "GeWAS_results/{phenotype}/imputed.stats.gz",
+        log = "GeWAS_results/{phenotype}/bolt_nocov_imp.log"
+    shell:
+        """
+        # NSLOTS might be something different depending on cluster set-up
+        {BOLT} \
+            --bed={LOW_MISSINGNESS_PREFIX}{{1:22}}.bed \
+            --bim={LOW_MISSINGNESS_PREFIX}{{1:22}}.bim \
+            --fam={input.fam} \
+            --lmmForceNonInf \
+            --numThreads=${{NSLOTS:-1}} \
+            --phenoFile={input.phenotype} \
+            --phenoCol={wildcards.phenotype} \
+            --LDscoresFile={LD_SCORES} \
+            --statsFile={output.stats} \
+            --bgenFile {IMPUTED_PREFIX}{{1:22}}_v3.bgen \
+            --sampleFile {SAMPLE} \
+            --noBgenIDcheck \
+            --statsFileBgenSnps={output.stats_bgen_snps} \
+            --verboseStats \
+            --maxIters 2000 2>&1 | tee -a {output.log}
+        """
+
+rule bolt_nocov_loco:
+    """
+    Run BOLT-LOCO on array data with no covariates
+    """
+    input:
+        bed = expand(ARRAY_DATA_PREFIX + "{plink_chrom}.bed", plink_chrom=range(1, 23)),
+        bim = expand(ARRAY_DATA_PREFIX + "{plink_chrom}.bim", plink_chrom=range(1, 23)),
+        fam = expand(ARRAY_DATA_PREFIX + "{plink_chrom}.fam", plink_chrom=range(1, 23)),
+        phenotype = rules.make_phenotype.output.phenotype
+    output:
+        pred_betas = "GeWAS_results/{phenotype}/{loco_chrom}_noninf.pred_betas",
+        stats = "GeWAS_results/{phenotype}/{loco_chrom}.stats.gz",
+        log = "GeWAS_results/{phenotype}/{loco_chrom}_loco.log"
+    wildcard_constraints:
+        loco_chrom = "chr\d+"
+    shell:
+        """
+        # NSLOTS might be something different depending on cluster set-up
+        chr_num=$(echo {wildcards.loco_chrom} | cut -c 4-)
+        ar=( "--fam={LOW_MISSINGNESS_PREFIX}1.fam" )
+        if [ ${{chr_num}} == 1 ]; then
+            ar=( "--fam={LOW_MISSINGNESS_PREFIX}2.fam" );
+        fi
+        for i in {{1..22}}; do
+            if [ ${{i}} -ne ${{chr_num}} ]; then
+                ar+=("--bim={LOW_MISSINGNESS_PREFIX}${{i}}.bim");
+                ar+=("--bed={LOW_MISSINGNESS_PREFIX}${{i}}.bed");
+            fi
+        done
+        echo "Running BOLT with file arguments:"
+        echo ${{ar[@]}}
+
+        {BOLT} \
+            ${{ar[@]}} \
+            --lmmForceNonInf \
+            --numThreads=${{NSLOTS:-1}} \
+            --phenoFile={input.phenotype} \
+            --phenoCol={wildcards.phenotype} \
+            --LDscoresFile={LD_SCORES} \
+            --statsFile={output.stats} \
+            --maxIters 2000 \
+            --verboseStats \
+            --predBetasFile={output.pred_betas} 2>&1 | tee -a {output.log}
+        """
+
+rule residuals:
+    """
+    Compute phenotype BLUP residuals
+    """
+    input:
+        # Merged bfiles for array (all chromosomes)
+        bim = ARRAY_DATA_PREFIX + ".bim",
+        bed = ARRAY_DATA_PREFIX + ".bed",
+        fam = ARRAY_DATA_PREFIX + ".fam",
+        pred_betas = rules.bolt_nocov_loco.output.pred_betas,
+        keep = SAMPLE,
+        pheno_file = rules.make_phenotype.output.phenotype
+    output:
+        plink_score = "GeWAS_results/{phenotype}/{loco_chrom}_plink.sscore",
+        plink_score_vars = "GeWAS_results/{phenotype}/{loco_chrom}_plink.sscore.vars",
+        plink_log = "GeWAS_results/{phenotype}/{loco_chrom}_plink.log",
+        residual = "GeWAS_results/{phenotype}/{loco_chrom}_residual.pheno"
+    shell:
+        """
+        plink_score={output.plink_score}
+        out_root="${{plink_score%.*}}"
+        {PLINK2} \
+            --bim {input.bim} \
+            --bed {input.bed} \
+            --fam {input.fam} \
+            --threads 1 \
+            --memory 2048 \
+            --score {input.pred_betas} 1 6 7 header list-variants \
+            --keep {input.keep} \
+            --out ${{out_root}} 2>&1 | tee -a {output.plink_log}
+
+        python3 form_plink_residual.py \
+            --pheno_path {input.pheno_file} \
+            --plink_score_path {output.plink_score} \
+            --plink_score_variants_path {output.plink_score_vars} \
+            --residualised_pheno_path {output.residual}
+        """
+
+rule gewas:
+    """
+    Perform genealogy-wide association
+    """
+    input:
+        residual = "GeWAS_results/{phenotype}/{loco_chrom}_residual.pheno",
+        arg = get_arg_path,
+        sample = SAMPLE,
+        bolt_nocov_imp_log = rules.bolt_nocov_imputation.output.log,
+    output:
+        tab_gz = "GeWAS_results/{phenotype}/GeWAS_{ARG_ID}_mu{sampling_rate}.tab.gz",
+        haps_gz = "GeWAS_results/{phenotype}/GeWAS_{ARG_ID}_mu{sampling_rate}.haps.gz"
+    params:
+        MIN_MAC = 5,
+        # For descendant_list_threshold use -1 by default,
+        # can be raised to save memory at cost of speed
+        DESCENDANT_LIST_THRESHOLD = -1,
+        # Random seed for mutation sampling algorithm
+        RANDOM_SEED = 12345,
+        # Significance threshold to write haps
+        # WARNING: a high threshold will write *a lot* to disk. 
+        # 0 to write nothing, genome-wide threshold to get only significant markers
+        HAPS_THRESHOLD = 1e-8
+    shell:
+        """
+        # NSLOTS might be something different depending on cluster set-up
+        export OMP_NUM_THREADS=${{NSLOTS:-1}}
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+
+        N_HAP=$(wc -l {input.sample} | awk '{{print 2 * ($1 - 2)}}')
+        maf_thresh=$(bc -l <<< "{params.MIN_MAC}/${{N_HAP}}") 
+
+        CALIBRATION_FACTOR=$(python scripts/invert_calibration_factor.py {input.bolt_nocov_imp_log}) 
+
+        python -u scripts/association.py \
+            --arg_path {input.arg} \
+            --arg_sample_path {input.arg_sample} \
+            --arg_id {wildcards.ARG_ID} \
+            --out_path $(dirname {output.tab_gz})/$(basename {output.tab_gz} .tab.gz) \
+            --residualised_pheno_path {input.residual} \
+            --calibration_factor ${{CALIBRATION_FACTOR}} \
+            --min_maf ${{maf_thresh}} \
+            --haps_threshold {params.HAPS_THRESHOLD} \
+            --sampling_rate {wildcards.sampling_rate} \
+            --random_seed {params.RANDOM_SEED} \
+            --descendant_list_threshold {params.DESCENDANT_LIST_THRESHOLD}
+        """
+
+#####
+# Genealogy-wide significance thresholds:
+# We first run a single GeWAS for a random phenotype across the whole genome,
+# and get scaling factors extrapolate from the first ARG chunk.
+# We then run 1000 random phenotypes for the first ARG chunk, get P-value quantiles
+# with confidence intervals, and extrapolate to the whole genome.
+rule wgn_null_phenotype:
+    """
+    Simulate a N(0, 1) phenotype as our null
+    """
+    input:
+        sample = SAMPLE
+    output:
+        phenotype = "GeWAS_results/null_model/phenotype.pheno"
+    params:
+        SEED = 1302
+    run:
+        import numpy as np
+        samples = []
+        with open(input.sample, 'r') as samplefile:
+            for j, line in enumerate(samplefile):
+                if j > 1:
+                    samples.append(line.strip().split()[0])
+        n_samples = len(samples)
+        np.random.seed(params.SEED)
+        phenotype = np.random.normal(size=n_samples)
+        with open(output.phenotype, 'w') as phenofile:
+            phenofile.write("FID IID Phenotype\n")
+            for pheno_val, sample in zip(phenotype, samples):
+                phenofile.write(f"{sample} {sample} {pheno_val}\n")
+
+rule whole_genome_null:
+    """
+    Run a GeWAS on the null phenotype for all ARG chunks
+    """
+    input:
+        arg = get_arg_path,
+        sample = SAMPLE,
+        pheno_file = rules.wgn_null_phenotype.output.phenotype
+    output:
+        tab_gz = temp("GeWAS_results/null_model/GeWAS_{ARG_ID}_mu{sampling_rate}.tab.gz"),
+        haps_gz = temp("GeWAS_results/null_model/GeWAS_{ARG_ID}_mu{sampling_rate}.haps.gz"),
+        res = "GeWAS_results/null_model/GeWAS_{ARG_ID}_mu{sampling_rate}.res"
+    params:
+        MIN_MAC = 5,
+        # For descendant_list_threshold use -1 by default,
+        # can be raised to save memory at cost of speed
+        DESCENDANT_LIST_THRESHOLD = -1,
+        # Random seed for mutation sampling algorithm
+        RANDOM_SEED = 12345,
+        # For null model simulations, we write nothing to disk
+        HAPS_THRESHOLD = 0,
+        min_mafs = NULL_MODEL_MIN_MAFS,
+    shell:
+        """
+        export OMP_NUM_THREADS=${{NSLOTS:-1}}
+        export MKL_NUM_THREADS=1
+        export NUMEXPR_NUM_THREADS=1
+
+        N_HAP=$(wc -l {input.sample} | awk '{{print 2 * ($1 - 2)}}')
+        maf_thresh=$(bc -l <<< "{params.MIN_MAC}/${{N_HAP}}") 
+
+        python -u scripts/association.py \
+            --arg_path {input.arg} \
+            --arg_sample_path {input.sample} \
+            --arg_id {wildcards.ARG_ID} \
+            --out_path $(dirname {output.tab_gz})/$(basename {output.tab_gz} .tab.gz) \
+            --residualised_pheno_path {input.pheno_file} \
+            --calibration_factor 1 \
+            --min_mac {params.MIN_MAC} \
+            --haps_threshold {params.HAPS_THRESHOLD} \
+            --sampling_rate {wildcards.sampling_rate} \
+            --random_seed {params.RANDOM_SEED} \
+            --descendant_list_threshold {params.DESCENDANT_LIST_THRESHOLD}
+
+        mu={wildcards.sampling_rate}
+        echo -ne "ARG_ID\tMAF\tmu\ttests\tminP\n" | tee {output.res}
+        for MAF in {params.min_mafs}; do
+            echo -ne "{wildcards.ARG_ID}\t$MAF\t$mu\t"
+            zcat < {output.tab_gz} | \
+                awk -v MAF=$MAF -v mu=$mu '
+                    BEGIN{{m=1}}
+                    NR>1 && $7>=MAF {{c++; if ($9<=m) m=$9}}
+                    END{{print 0+c "\t" m}}'
+        done | tee -a {output.res}
+        """
+
+rule summarize_whole_genome_null:
+    """Compute whole-genome scaling factors for ARG_ID[0] null model simulations"""
+    input:
+        wgn_res = expand(
+            "GeWAS_results/null_model/GeWAS_{ARG_ID}_mu{{sampling_rate}}.res",
+            ARG_ID=ARG_IDS
+        )
+    output:
+        scaling = "GeWAS_results/null_model/mu{sampling_rate}_null_chunk.scaling"
+    params:
+        null_arg_id = ARG_IDS[0],
+        min_mafs = NULL_MODEL_MIN_MAFS,
+    shell:
+        """
+        mu={wildcards.sampling_rate}
+        for MAF in {params.min_mafs}; do
+            echo -ne "$MAF\t$mu\t"
+            for resfile in {input.wgn_res}; do
+                cat $resfile
+            done | awk -v MAF=$MAF -v mu=$mu 'NF==5 && $2==MAF && $3==mu' | \
+                awk -v k_arg={params.null_arg_id} \
+                'BEGIN{{m=1}} $1==k_arg {{num=$4}} {{den+=$4}} $5<m {{m=$5}} END {{print num/den "\t" m "\t" NR}}'
+        done | tee {output.scaling}
+        """
+
+rule null_simulation:
+    """Run N_SEEDS simulations for the ARG_IDS[0] chunk"""
+    input:
+        arg = f"{ARG_DIRECTORY}/{ARG_IDS[0]}.argn"
+    output:
+        thresholds = "GeWAS_results/null_model/mu{sampling_rate}_results_{seed}.tsv"
+    params:
+        MIN_MAC = 5,
+        DESCENDANT_LIST_THRESHOLD = -1,
+        N_SEEDS_PER_JOB = N_SEEDS_PER_JOB,
+    shell:
+        """
+        python scripts/null_model.py \
+            --arg_path {input.arg} \
+            --descendant_list_threshold {params.DESCENDANT_LIST_THRESHOLD} \
+            --min_mac {params.MIN_MAC} \
+            --mutation_rate {wildcards.sampling_rate} \
+            --start_seed {wildcards.seed}000 \
+            --num_seeds {params.N_SEEDS_PER_JOB} | tee {output.thresholds}
+        """
+
+rule summarize_null_simulations:
+    """Apply the scaling computed in summarize_whole_genome_null to the ARG_IDS[0] simulations to get genealogy-wide thresholds."""
+    input:
+        thresholds = expand("GeWAS_results/null_model/mu{{sampling_rate}}_results_{seed}.tsv", seed=range(1, 1 + N_JOBS)),
+        scaling = rules.summarize_whole_genome_null.output.scaling,
+        sample = SAMPLE
+    output:
+        thresholds = "GeWAS_results/mu{sampling_rate}_thresholds.tsv"
+    params:
+        null_arg = f"{ARG_DIRECTORY}/{ARG_IDS[0]}.argn",
+        min_mafs = NULL_MODEL_MIN_MAFS,
+    shell:
+        """
+        set +o pipefail;
+        N_HAP=$(wc -l {input.sample} | awk '{{print 2 * ($1 - 2)}}')
+        mu={wildcards.sampling_rate}
+        echo -ne "Type\tARG_ID\tsamples\tMu\tMinimum_MAF\tthreshold\tlower_95%_CI\tupper_95%_CI\treplicates\tpercent_used\n" | tee {output.thresholds}
+        for MAF in {params.min_mafs}; do
+            R=`cat {input.scaling} | awk -v MAF=$MAF '{{if ($1==MAF) {{print $3}}}}'`
+            echo -ne "ARG\t{params.null_arg}\t$N_HAP\t$mu\t$MAF\t"
+            cat {input.thresholds} \
+                | awk '{{if (NF == 10) {{print $10}}}}' \
+                | python scripts/harrell_davis.py \
+                | awk -v R=$R '{{printf("%.2e\t%.2e\t%.2e\t%d\t%.3f", $1*R, $2*R, $3*R, $4, R*100)}}'
+            echo -ne "\n"
+        done | tee -a {output.thresholds}
+        """

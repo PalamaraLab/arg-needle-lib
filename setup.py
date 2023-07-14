@@ -129,7 +129,7 @@ with open('RELEASE_NOTES.md', encoding='utf-8') as f:
 
 setup(
     name='arg-needle-lib',
-    version='1.0.0',
+    version='1.0.1',
     author='ARG-Needle Developers',
     url='https://palamaralab.github.io/software/argneedle/',
     install_requires=[

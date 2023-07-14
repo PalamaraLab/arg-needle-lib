@@ -1,0 +1,59 @@
+name: "Tests & examples on Ubuntu"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+
+  build-and-test:
+    name: Tests & examples on Ubuntu
+    runs-on: ubuntu-22.04
+    if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+
+    steps:
+
+      - name: checkout repo & submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: install system packages
+        run: |
+          sudo apt -y update
+          sudo apt -y install libboost-dev libboost-math-dev libboost-iostreams-dev libeigen3-dev
+
+      - name: make build directory
+        run: mkdir build_dir
+
+      - name: cmake configure
+        run: cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        working-directory: build_dir
+
+      - name: cmake build
+        run: cmake --build . --parallel 2
+        working-directory: build_dir
+
+      - name: cmake test
+        run: ctest -j2 --output-on-failure
+        working-directory: build_dir
+
+      - name: run example arg
+        run: ./example/example_arg
+        working-directory: build_dir
+
+      - name: run example mutation
+        run: ./example/example_mutation
+        working-directory: build_dir
+
+      - name: run example node
+        run: ./example/example_node
+        working-directory: build_dir
+
+      - name: run example visit
+        run: ./example/example_visit
+        working-directory: build_dir

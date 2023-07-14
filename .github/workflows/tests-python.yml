@@ -1,0 +1,52 @@
+name: "Python tests"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+
+  build-and-test:
+    name: Python tests
+    runs-on: ubuntu-22.04
+    if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+    strategy:
+      matrix:
+        python-version: ['3.7', '3.10']
+
+    steps:
+
+      - name: checkout repo & submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      
+      - name: set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: display Python version
+        run: python --version
+
+      - name: install system packages
+        run: |
+          sudo apt -y update
+          sudo apt -y install libboost-dev libboost-math-dev libboost-iostreams-dev libeigen3-dev
+
+      - name: install python dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install cmake ninja
+
+      - name: install arg_needle_lib with dev dependencies
+        run: |
+          pip install ".[dev]"
+
+      - name: run python tests
+        run: |
+          pytest test -v -s --ignore=test/test_big_args.py

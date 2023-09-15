@@ -16,7 +16,7 @@
 import os
 import sys
 # sys.path.insert(0, os.path.abspath(os.path.join('..', '..')))
-sys.path.insert(0, os.path.abspath(os.path.join('..', '..', 'arg_needle_lib')))
+sys.path.insert(0, os.path.abspath(os.path.join('..', 'arg_needle_lib')))
 
 
 # -- Project information -----------------------------------------------------
@@ -38,6 +38,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    'sphinx_rtd_theme',
 ]
 
 # Added by brianzhang01

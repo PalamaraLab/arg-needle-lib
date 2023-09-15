@@ -15,6 +15,7 @@ build:
     - libboost-math-dev
     - libboost-iostreams-dev
     - libeigen3-dev
+    - libgsl-dev
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:

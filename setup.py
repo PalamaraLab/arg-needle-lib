@@ -143,10 +143,12 @@ setup(
     ],
     extras_require={
         'dev': [
-            'sphinx',
-            'sphinx-rtd-theme',
             'pytest',
             'tszip>=0.2.1',
+        ],
+        'docs': [
+            'sphinx',
+            'sphinx-rtd-theme',
         ],
     },
     description='Ancestral recombination graph (ARG) data structure and operations.',

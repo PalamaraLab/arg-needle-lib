@@ -17,6 +17,7 @@ build:
     - libeigen3-dev
     - libgsl-dev
     - cmake
+    - ninja-build
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:

@@ -103,17 +103,23 @@ jobs:
 
   upload_all:
     name: Upload to PyPI
-    needs: build_wheels
+    needs: [build_wheels_cloud, build_wheels_self_hosted]
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release' && github.event.action == 'published' && github.repository == 'PalamaraLab/arg-needle-lib' }}
 
     steps:
       - uses: actions/setup-python@v3
 
-      - name: Download wheels
+      - name: Download wheels from cloud runners
         uses: actions/download-artifact@v3
         with:
-          name: wheels
+          name: wheels-cloud
+          path: wheels
+
+      - name: Download wheels from self-hosted runner
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels-self-hosted
           path: wheels
 
       - uses: pypa/gh-action-pypi-publish@v1.6.4

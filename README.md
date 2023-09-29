@@ -75,7 +75,7 @@ or an example:
 
 ## For developers: making a release
 
-- Bump the version number in [setup.py](setup.py), [CMakeLists.txt](CMakeLists.txt), and [docs/source/conf.py](docs/source/conf.py)
+- Bump the version number in [setup.py](setup.py), [CMakeLists.txt](CMakeLists.txt), and [docs/conf.py](docs/conf.py)
 - Update [RELEASE_NOTES.md](RELEASE_NOTES.md)
 - Push changes and check that all [GitHub workflows](https://github.com/PalamaraLab/arg_needle_lib/actions) pass
 - Tag the commit in Git using syntax `vX.Y.Z`

@@ -1,6 +1,19 @@
 # arg-needle-lib Release Notes
 
 
+## v1.0.2 (2023-09-29)
+
+### Breaking changes
+
+None
+
+### Other changes
+
+- Improve documentation.
+- Build Python wheels for macOS arm64 (Apple Silicon)
+- Build wheels for Python 3.12
+
+
 ## v1.0.1 (2023-07-14)
 
 ### Breaking changes

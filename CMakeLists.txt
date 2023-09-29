@@ -19,12 +19,7 @@ cmake_minimum_required(VERSION 3.16)
 message(STATUS "Using CMake version ${CMAKE_VERSION}")
 cmake_policy(VERSION 3.16)
 
-# Attempt to force arm64 arch when building wheels on CI
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
-    set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architecture for macOS" FORCE)
-endif()
-
-project(arg_needle_lib LANGUAGES CXX VERSION 1.0.1)
+project(arg_needle_lib LANGUAGES CXX VERSION 1.0.2)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

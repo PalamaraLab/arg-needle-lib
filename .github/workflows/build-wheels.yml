@@ -57,18 +57,9 @@ jobs:
           retention-days: 1
 
   build_wheels_self_hosted:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build wheels on self-hosted-macos-arm64-hemlock
+    runs-on: self-hosted-macos-arm64-hemlock
     if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [self-hosted-macos-arm64-hemlock]
-        include:
-          - os: macos-13
-            cibw_archs_macos: x86_64
-          - os: self-hosted-macos-arm64-hemlock
-            cibw_archs_macos: arm64
 
     env:
       CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*

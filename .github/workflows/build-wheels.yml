@@ -27,7 +27,7 @@ jobs:
             cibw_archs_macos: arm64
 
     env:
-      CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
+      CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
       CIBW_SKIP: cp3*-musllinux_*
       CIBW_ARCHS_MACOS: auto64
       CIBW_ARCHS_LINUX: auto64

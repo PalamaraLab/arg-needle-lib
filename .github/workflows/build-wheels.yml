@@ -12,30 +12,25 @@ on:
       - published
 
 jobs:
-  build_wheels:
+  build_wheels_cloud:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-13, self-hosted-macos-arm64-hemlock]
-        include:
-          - os: macos-13
-            cibw_archs_macos: x86_64
-          - os: self-hosted-macos-arm64-hemlock
-            cibw_archs_macos: arm64
+        os: [ubuntu-22.04, macos-13]
 
     env:
-      CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
+      CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
       CIBW_SKIP: cp3*-musllinux_*
-      CIBW_ARCHS_MACOS: auto64
+      CIBW_ARCHS_MACOS: x86_64
       CIBW_ARCHS_LINUX: auto64
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
       CIBW_BEFORE_ALL_LINUX: yum -y install boost-devel eigen3-devel
       CIBW_BEFORE_ALL_MACOS: brew install boost eigen llvm@17
       CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
-      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++" CMAKE_APPLE_SILICON_PROCESSOR=${{ matrix.cibw_archs_macos }}
+      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
       MACOSX_DEPLOYMENT_TARGET: 10.15
 
     steps:
@@ -50,14 +45,59 @@ jobs:
         uses: actions/setup-python@v3
 
       - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.16.0
+        run: python -m pip install cibuildwheel==2.16.1
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v3
         with:
-          name: wheels
+          name: wheels-cloud
+          path: ./wheelhouse/*.whl
+          retention-days: 1
+
+  build_wheels_self_hosted:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [self-hosted-macos-arm64-hemlock]
+        include:
+          - os: macos-13
+            cibw_archs_macos: x86_64
+          - os: self-hosted-macos-arm64-hemlock
+            cibw_archs_macos: arm64
+
+    env:
+      CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
+      CIBW_ARCHS_MACOS: arm64
+      CIBW_BEFORE_ALL_MACOS: brew install boost eigen llvm@17
+      CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
+      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
+      MACOSX_DEPLOYMENT_TARGET: 10.15
+
+    steps:
+
+      - name: checkout repo & submodules
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.16.1
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: wheels-self-hosted
           path: ./wheelhouse/*.whl
           retention-days: 1
 

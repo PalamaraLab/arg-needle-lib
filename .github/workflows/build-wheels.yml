@@ -11,6 +11,18 @@ on:
     types:
       - published
 
+env:
+  CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
+  CIBW_SKIP: cp3*-musllinux_*
+  CIBW_ARCHS_MACOS: auto64
+  CIBW_ARCHS_LINUX: auto64
+  CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+  CIBW_BEFORE_ALL_LINUX: yum -y install boost-devel eigen3-devel
+  CIBW_BEFORE_ALL_MACOS: brew install boost eigen
+  CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
+  CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@15)/bin/clang++"
+  MACOSX_DEPLOYMENT_TARGET: 10.15
+
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
@@ -20,23 +32,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, macos-13, self-hosted-macos-arm64-hemlock]
-        include:
-          - os: macos-13
-            cibw_archs_macos: x86_64
-          - os: self-hosted-macos-arm64-hemlock
-            cibw_archs_macos: arm64
-
-    env:
-      CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
-      CIBW_SKIP: cp3*-musllinux_*
-      CIBW_ARCHS_MACOS: ${{ matrix.cibw_archs_macos }}
-      CIBW_ARCHS_LINUX: auto64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_BEFORE_ALL_LINUX: yum -y install boost-devel eigen3-devel
-      CIBW_BEFORE_ALL_MACOS: brew install boost eigen
-      CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
-      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@15)/bin/clang++"
-      MACOSX_DEPLOYMENT_TARGET: 10.15
 
     steps:
 

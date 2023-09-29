@@ -18,6 +18,7 @@
 # Based on https://github.com/pybind/cmake_example
 
 import os
+import platform
 import sys
 import subprocess
 
@@ -66,9 +67,12 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_BUILD_TYPE={cfg}",
             "-DWARNINGS_AS_ERRORS=OFF",
             "-DENABLE_TESTING=OFF",
-            "-DBoost_NO_BOOST_CMAKE=ON", # from arni: o/w boost 1.74 gets confused re. mtx
             "-DMAKE_DOCS=OFF"
         ]
+
+        if platform.system() != "Darwin":
+            cmake_args.append("-DBoost_NO_BOOST_CMAKE=ON")  # from arni: o/w boost 1.74 gets confused re. mtx
+
         build_args = []
 
         if self.compiler.compiler_type != "msvc":

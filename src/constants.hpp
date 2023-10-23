@@ -31,8 +31,8 @@ namespace anl {
     /**
      * Calculate the default number of potentially concurrent tasks for utilities that may be run asynchronously.
      *
-     * This is one less than the number of cores. If the number of cores can't be calculated, this function returns
-     * one less than default_max_tasks. If this this would be 0, then 1 is returned instead.
+     * This is the number of cores detected at runtime, unless this cannot be detected, in which case it is
+     * default_max_tasks.
      *
      * The result is cached to ensure the computation is performed at most once each time arg-needle-lib is run.
      *

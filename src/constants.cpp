@@ -26,11 +26,7 @@ unsigned anl::get_default_concurrency() {
     static const unsigned default_concurrency = [] {
         // Compute the runtime constant. This lambda is executed only once.
         unsigned result = std::thread::hardware_concurrency();
-
-        result = result == 0u ? anl::default_max_tasks : result;
-        result = result > 1u ? result - 1u : 1u;
-
-        return result;
+        return result == 0u ? anl::default_max_tasks : result;
     }();
 
     return default_concurrency;

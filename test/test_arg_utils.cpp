@@ -22,6 +22,7 @@
 #include "types.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include <vector>
 
@@ -770,4 +771,36 @@ TEST_CASE("Number of Lineages Tests") {
 
   int result = arg_utils::num_lineages(arg_polytomy, 50, height);
   REQUIRE(result == expected);
+}
+
+TEST_CASE("Test local volume async") {
+
+    const std::string nodes_file_name = ARG_NEEDLE_TESTDATA_DIR "/length_1e6_samples_1e3/nodes.txt";
+    const std::string edges_file_name = ARG_NEEDLE_TESTDATA_DIR "/length_1e6_samples_1e3/edges.txt";
+
+    // Read in the ARG from a file
+    ARG arg = arg_utils::arg_from_ts_files(nodes_file_name, edges_file_name);
+    arg.populate_children_and_roots();
+
+    // Test total volume calculation with varying numbers of tasks
+    arg_real_t vol_v1 = arg_utils::total_volume(arg);
+    arg_real_t vol_v2 = arg_utils::local_volume(arg, arg.start, arg.end);
+    arg_real_t vol_v3 = arg_utils::local_volume(arg, arg.start, arg.end, 2u);
+    arg_real_t vol_v4 = arg_utils::local_volume(arg, arg.start, arg.end, 3u);
+    arg_real_t vol_v5 = arg_utils::local_volume(arg, arg.start, arg.end, 10u);
+    arg_real_t vol_v6 = arg_utils::local_volume(arg, arg.start, arg.end, 100u);
+
+    REQUIRE(vol_v1 == Catch::Approx(vol_v2).margin(1e-12));
+    REQUIRE(vol_v1 == Catch::Approx(vol_v3).margin(1e-12));
+    REQUIRE(vol_v1 == Catch::Approx(vol_v4).margin(1e-12));
+    REQUIRE(vol_v1 == Catch::Approx(vol_v5).margin(1e-12));
+    REQUIRE(vol_v1 == Catch::Approx(vol_v6).margin(1e-12));
+
+    // Test local volume calculation on part of the length, with varying numbers of tasks
+    arg_real_t vol_v7 = arg_utils::local_volume(arg, 2e5, 4e5);
+    arg_real_t vol_v8 = arg_utils::local_volume(arg, 2e5, 4e5, 3u);
+    arg_real_t vol_v9 = arg_utils::local_volume(arg, 2e5, 4e5, 7u);
+
+    REQUIRE(vol_v7 == Catch::Approx(vol_v8).margin(1e-12));
+    REQUIRE(vol_v7 == Catch::Approx(vol_v9).margin(1e-12));
 }

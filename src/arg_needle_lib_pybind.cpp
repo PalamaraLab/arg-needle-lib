@@ -256,8 +256,8 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
   m.def("num_lineages", &arg_utils::num_lineages, py::arg("arg"), py::arg("position"),
         py::arg("height"), "Count the number of lineages at a given position and height");
   m.def("total_volume", &arg_utils::total_volume, py::arg("arg"), "Get ARG volume");
-  m.def("local_volume", &arg_utils::local_volume, py::arg("arg"), py::arg("min_position"),
-        py::arg("max_position"), "Get the local arg volume");
+  m.def("local_volume", &arg_utils::local_volume, py::arg("arg"), py::arg("min_pos") = std::nullopt,
+        py::arg("max_pos") = std::nullopt, py::arg("num_tasks") = std::nullopt, "Get the local arg volume");
   // arg_utils: association
   m.def("association_diploid_all", &arg_utils::association_diploid_all, py::arg("arg"),
         py::arg("phenotype"), py::arg("use_sample"), py::arg("file_root"),

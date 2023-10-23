@@ -30,6 +30,7 @@
 #include "types.hpp"
 #include "utils.hpp"
 
+#include <optional>
 #include <queue>
 #include <stack>
 #include <string>
@@ -49,7 +50,22 @@ bool visit_identical(const ARG& arg, arg_real_t rel_tol = 1e-6, arg_real_t abs_t
 void time_efficient_visit(const ARG& arg, bool timing = true);
 std::unordered_map<DescendantList, arg_real_t, DescendantListHash> efficient_visit(const ARG& arg);
 arg_real_t total_volume(const ARG& arg);
-arg_real_t local_volume(const ARG& arg, arg_real_t min_position = -1, arg_real_t max_position = -1);
+
+/**
+ * Computes the local volume of an ARG between min and max position.
+ * NOTE: if the max_position - min_position is really large then this may result in a drop in performance relative
+ * to total_volume. The main use case for this function is for testing the visit_branches function.
+ *
+ * @param arg the arg to calculate the local volume of
+ * @param min_pos the optional start position
+ * @param max_pos the optional end position
+ * @param num_tasks the optional number of async tasks to use when chunking this computation
+ */
+arg_real_t local_volume(const ARG &arg, std::optional<arg_real_t> min_pos = std::nullopt,
+                        std::optional<arg_real_t> max_pos = std::nullopt,
+                        std::optional<unsigned> num_tasks = std::nullopt);
+
+
 std::vector<arg_real_t> allele_frequency_spectrum_volume(const ARG& arg);
 std::map<arg_real_t, std::string> generate_mutations_map(const ARG& arg, arg_real_t mu,
                                                unsigned random_seed = 0);

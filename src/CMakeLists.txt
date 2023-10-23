@@ -28,6 +28,7 @@ set(
         arg_edge.cpp
         arg_node.cpp
         arg_utils.cpp
+        constants.cpp
         descendant_list.cpp
         file_utils.cpp
         mutation.cpp
@@ -44,6 +45,7 @@ set(
         arg_edge.hpp
         arg_node.hpp
         arg_utils.hpp
+        constants.hpp
         descendant_list.hpp
         deserialization_params.hpp
         file_utils.hpp

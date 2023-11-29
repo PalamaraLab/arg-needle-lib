@@ -54,7 +54,7 @@ set(
         site.hpp
         types.hpp
         utils.hpp
-)
+        arg_traversal.hpp)
 
 add_library(arg_needle_lib STATIC ${arg_needle_lib_src} ${arg_needle_lib_hdr})
 

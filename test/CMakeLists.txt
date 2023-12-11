@@ -20,7 +20,7 @@ FetchContent_Declare(
         Catch2
         GIT_SHALLOW TRUE
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG f4af9f69265d009a457aa99d1075cfba78652a66 # version 3.0.0 preview 4
+        GIT_TAG 53d0d913a422d356b23dd927547febdf69ee9081 # version 3.5.0
 )
 FetchContent_MakeAvailable(Catch2)
 message(STATUS "Obtained Catch2 ${Catch2_VERSION}")

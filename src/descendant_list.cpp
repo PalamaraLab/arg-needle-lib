@@ -18,7 +18,9 @@
 */
 
 #include "descendant_list.hpp"
+#include "utils.hpp"
 
+#include <algorithm>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/functional/hash.hpp>
 #include <iostream>
@@ -34,7 +36,7 @@ using std::vector;
 size_t DescendantList::threshold = 64;
 
 DescendantList::DescendantList(size_t _n, int _leaf_id) : n(_n) {
-  if (1 >= threshold) {
+  if (threshold <= 1) {
     using_bitset = true;
     db = dynamic_bitset<>(n);
     db.set(_leaf_id, true);
@@ -46,14 +48,108 @@ DescendantList::DescendantList(size_t _n, int _leaf_id) : n(_n) {
 }
 
 DescendantList::DescendantList(size_t _n) : n(_n) {
-  if (0 >= threshold) {
+  if (threshold <= 0) {
     using_bitset = true;
     db = dynamic_bitset<>(n);
   }
 }
 
+DescendantList::DescendantList(size_t _n, const dynamic_bitset<>& bitset) : n(_n), db(bitset) {
+  using_bitset = true;
+}
+
+DescendantList::DescendantList(size_t _n, const std::vector<int>& bitset) : n(_n) {
+  if (bitset.size() != n) {
+    throw std::invalid_argument(THROW_LINE("Bitset has wrong size."));
+  }
+
+  // Count carriers
+  int num_desc = 0;
+  for (const int b : bitset) {
+    if (b > 1 || b < 0) {
+      throw std::invalid_argument(THROW_LINE("Only bitsets with value 0 and 1 are accepted."));
+    }
+    else if (b == 1) {
+      ++num_desc;
+    }
+  }
+
+  using_bitset = num_desc >= threshold;
+  if (using_bitset) {
+    // Initialize dynamic bitset
+    db = dynamic_bitset<>(n);
+    for (int i = 0; i < bitset.size(); i++) {
+      if (bitset[i]) {
+        db.set(i, true);
+      }
+    }
+  }
+  else {
+    ordered_ids.reserve(num_desc);
+    // Initialize set
+    for (int i = 0; i < bitset.size(); i++) {
+      if (bitset[i]) {
+        ordered_ids.push_back(i);
+      }
+    }
+  }
+}
+
+void DescendantList::switch_to_db() {
+  if (!using_bitset) {
+    db = dynamic_bitset<>(n);
+    for (int i : ordered_ids) {
+      db.set(i, true);
+    }
+    using_bitset = true;
+    ordered_ids.clear();
+  }
+}
+
+int DescendantList::peek() {
+  if (num_values() == 0) {
+    throw std::runtime_error(THROW_LINE("No elements in descendant list."));
+  }
+  if (using_bitset) {
+    return db.find_first();
+  }
+  return ordered_ids[0];
+}
+
+int DescendantList::get(const int i) const {
+  if (i < 0 || i >= n) {
+    throw std::invalid_argument(THROW_LINE("Index out of bounds."));
+  }
+  if (using_bitset) {
+    return db[i];
+  }
+  return 1 ? std::find(ordered_ids.begin(), ordered_ids.end(), i) != ordered_ids.end() : 0;
+}
+
+void DescendantList::set(const int i, bool v) {
+  if (i < 0 || i >= n) {
+    throw std::invalid_argument(THROW_LINE("Index out of bounds."));
+  }
+  if (using_bitset) {
+    db.set(i, v);
+  }
+  else {
+    if (v) {
+      ordered_ids.insert(std::upper_bound(ordered_ids.begin(), ordered_ids.end(), i), i);
+    }
+    else {
+      ordered_ids.erase(std::remove(ordered_ids.begin(), ordered_ids.end(), i), ordered_ids.end());
+    }
+  }
+  if (!using_bitset && num_values() >= threshold) {
+    switch_to_db();
+  }
+}
+
+// Add input bitset to this bitset
 void DescendantList::add(const DescendantList& other) {
   assert(n == other.n);
+
   if (using_bitset && other.using_bitset) {
     db |= other.db;
   }
@@ -62,31 +158,121 @@ void DescendantList::add(const DescendantList& other) {
       db.set(i, true);
     }
   }
-  else {
-    if (other.using_bitset || num_values() + other.num_values() >= threshold) {
-      using_bitset = true;
-      db = dynamic_bitset<>(n);
-      for (int i : ordered_ids) {
-        db.set(i, true);
-      }
-      if (other.using_bitset) {
-        db |= other.db;
-      }
-      else {
-        for (int i : other.ordered_ids) {
-          db.set(i, true);
-        }
-      }
+  else if (other.using_bitset || num_values() + other.num_values() >= threshold) {
+    db = dynamic_bitset<>(n);
+    for (int i : ordered_ids) {
+      db.set(i, true);
+    }
+    if (other.using_bitset) {
+      db |= other.db;
     }
     else {
-      vector<int> tmp;
-      tmp.reserve(ordered_ids.size() + other.ordered_ids.size());
-      // TODO: remove duplicates if they exist, even though they shouldn't
-      std::merge(ordered_ids.begin(), ordered_ids.end(), other.ordered_ids.begin(),
-                 other.ordered_ids.end(), std::back_inserter(tmp));
-      ordered_ids = std::move(tmp);
+      for (int i : other.ordered_ids) {
+        db.set(i, true);
+      }
+    }
+    using_bitset = true;
+    ordered_ids.clear();
+  }
+  else {
+    vector<int> tmp;
+    tmp.reserve(ordered_ids.size() + other.ordered_ids.size());
+    // TODO: remove duplicates if they exist, even though they shouldn't
+    std::merge(ordered_ids.begin(), ordered_ids.end(), other.ordered_ids.begin(),
+               other.ordered_ids.end(), std::back_inserter(tmp));
+    tmp.resize(tmp.end() - tmp.begin());
+    ordered_ids = std::move(tmp);
+  }
+
+  // If we've passed the threshold, convert container to db.
+  if (!using_bitset && num_values() >= threshold) {
+    switch_to_db();
+  }
+}
+
+// Subtract input bitset from this bitset
+void DescendantList::erase(const DescendantList& other) {
+  assert(n == other.n);
+  if (using_bitset && other.using_bitset) {
+    db -= other.db;
+  }
+  else if (using_bitset && !other.using_bitset) {
+    for (const int i : other.ordered_ids) {
+      db.set(i, false);
     }
   }
+  else if (!using_bitset && other.using_bitset) {
+    vector<int> tmp;
+    for (int i : ordered_ids) {
+      if (!other.db[i]) {
+        tmp.push_back(i);
+      }
+    }
+    ordered_ids = std::move(tmp);
+  }
+  else {
+    vector<int> tmp;
+    std::set_difference(ordered_ids.begin(), ordered_ids.end(), other.ordered_ids.begin(),
+                        other.ordered_ids.end(), std::back_inserter(tmp));
+    ordered_ids = std::move(tmp);
+  }
+
+  // If we've dropped below threshold, convert to set-based DescList
+  if (using_bitset && num_values() < threshold) {
+    ordered_ids.clear();
+    for (size_t i = db.find_first(); i < n; i = db.find_next(i)) {
+      ordered_ids.push_back(i);
+    }
+    db.clear();
+    using_bitset = false;
+    return;
+  }
+}
+
+// Returns true iff input bitset is a subset of this bitset
+bool DescendantList::includes(DescendantList& other) {
+  if (using_bitset && other.using_bitset) {
+    return other.db.is_subset_of(db);
+  }
+  else if (using_bitset && !other.using_bitset) {
+    for (int i : other.ordered_ids) {
+      if (!db[i]) {
+        return false;
+      }
+    }
+  }
+  else if (!using_bitset && other.using_bitset) {
+    vector<int> intersection;
+    intersection.reserve(std::min(ordered_ids.size(), other.num_values()));
+    for (int i : ordered_ids) {
+      if (other.db[i]) {
+        intersection.push_back(i);
+      }
+    }
+    return intersection.size() == other.num_values();
+  }
+  else {
+    vector<int> intersection;
+    intersection.reserve(std::min(ordered_ids.size(), other.ordered_ids.size()));
+    std::set_intersection(ordered_ids.begin(), ordered_ids.end(), other.ordered_ids.begin(),
+                          other.ordered_ids.end(), std::back_inserter(intersection));
+    return intersection.size() == other.ordered_ids.size();
+  }
+  return true;
+  // else {
+  //   return intersect(other).num_values() == other.num_values();
+  // }
+}
+
+DescendantList DescendantList::intersect(DescendantList& other) {
+  dynamic_bitset<> db_other = other.bitset();
+  dynamic_bitset<> intersection(n);
+  for (const auto v : values()) {
+    if (db_other[v]) {
+      intersection.set(v, true);
+    }
+  }
+  return DescendantList(n, intersection);
 }
 
 const vector<int>& DescendantList::values() {
@@ -107,6 +293,14 @@ const dynamic_bitset<>& DescendantList::bitset() {
     }
   }
   return db;
+}
+
+DescendantList DescendantList::complement() {
+  std::vector<int> complement(n, 1);
+  for (auto v : values()) {
+    complement[v] = false;
+  }
+  return DescendantList(n, complement);
 }
 
 size_t DescendantList::num_values() const {
@@ -203,7 +397,25 @@ bool DescendantList::operator==(const DescendantList& other) const {
   }
 }
 
-// looks pretty slow, with many string allocations
+DescendantList DescendantList::operator+(const DescendantList& other) const {
+  if (n != other.n) {
+    std::invalid_argument(THROW_LINE("Bitsets have different sizes."));
+  }
+  DescendantList out_list(*this);
+  out_list.add(other);
+  return out_list;
+}
+
+DescendantList DescendantList::operator-(const DescendantList& other) const {
+  if (n != other.n) {
+    std::invalid_argument(THROW_LINE("Bitsets have different sizes."));
+  }
+  DescendantList out_list(*this);
+  out_list.erase(other);
+  return out_list;
+}
+
+// looks pretty slow, with many string allocations!
 ostream& operator<<(ostream& os, const DescendantList& desc_list) {
   os << "{";
   string subset = "";

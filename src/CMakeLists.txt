@@ -30,6 +30,7 @@ set(
         arg_utils.cpp
         descendant_list.cpp
         file_utils.cpp
+        genotype_mapping.cpp
         mutation.cpp
         random_utils.cpp
         root.cpp
@@ -47,6 +48,7 @@ set(
         descendant_list.hpp
         deserialization_params.hpp
         file_utils.hpp
+        genotype_mapping.hpp
         mutation.hpp
         IntervalTree.h
         random_utils.hpp

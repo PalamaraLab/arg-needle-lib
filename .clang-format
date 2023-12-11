@@ -7,5 +7,7 @@ ColumnLimit: 120
 BreakBeforeBraces: Linux
 PointerAlignment: Left
 NamespaceIndentation: None
+AlignAfterOpenBracket: DontAlign
+AllowAllParametersOfDeclarationOnNextLine: true
 
 ...

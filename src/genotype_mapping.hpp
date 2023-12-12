@@ -22,18 +22,179 @@
 
 #include "arg.hpp"
 #include "arg_edge.hpp"
+#include "descendant_list.hpp"
 #include "types.hpp"
 
+#include <limits>
 #include <utility>
 #include <vector>
 
 namespace arg_utils
 {
 
+struct RelateMutationMapping {
+  ARGEdge* edge = nullptr;
+  double penalty = std::numeric_limits<double>::max();
+};
+
+/**
+ * @brief Maps a genotype to an ancestral recombination graph (ARG).
+ *
+ * This function integrates genotype information into a given ARG by identifying and mapping carriers of mutations.
+ * It requires the ARG to be pre-populated with children and roots.
+ *
+ * @param arg Reference to the ARG object to be modified.
+ * @param genotype A vector containing genotype information.
+ * @param site_id The identifier for the site within the ARG.
+ *
+ * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called first).
+ * @throws std::invalid_argument if the mutation is carried by all samples, as this is currently unsupported.
+ *
+ * @note This function does not support mutations carried by all samples (see issue #140).
+ *
+ * @details The function first checks if the ARG has been properly initialized with roots.
+ * It then creates a list of carriers based on the genotype and identifies the position of the mutation.
+ * For each carrier, it locates the highest edge in the ARG associated with the mutation and updates the ARG by adding the mutation.
+ */
 void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, int site_id);
 
-std::pair<bool, std::vector<ARGEdge*>> map_genotype_to_ARG_relate(
+/**
+ * @brief Maps a genotype to an ancestral recombination graph (ARG) approximately based on allele counts and frequencies.
+ *
+ * This function aims to approximate the mapping of a genotype to an ARG. It operates differently based on allele counts
+ * and minor allele frequencies (MAFs), returning a pair of a boolean (indicating if alleles are flipped) and a vector of
+ * ARGEdge pointers that the genotype maps to.
+ *
+ * @param arg Reference to the ARG object.
+ * @param genotype A vector of integers representing the genotype.
+ * @param pos The genomic position of interest.
+ * @param maf_threshold The threshold for minor allele frequency.
+ *
+ * @return A pair consisting of:
+ *   - A boolean indicating whether the alleles are flipped (true if flipped, false otherwise).
+ *   - A vector of pointers to ARGEdges that the genotype maps to.
+ *
+ * @details The function operates as follows:
+ *   - For allele counts ≤ 4, maps up to 4 edges parsimoniously.
+ *   - For allele counts ≥ n - 4, considers the complement of carriers (flipped case) and maps accordingly.
+ *   - For allele frequencies within the MAF threshold, employs a different mapping strategy focusing on the best edge
+ *     and traversing until the MRCA of all carriers is reached.
+ *   - The function returns an empty vector if no successful mapping is found.
+ *
+ * The approach varies based on whether the allele count is small (indicating rare mutations) or large, as well as
+ * whether the allele frequency falls within a specified MAF threshold.
+ *
+ * @throws std::runtime_error if the genotype is monomorphic (all alleles are the same), as it cannot map such mutations.
+ */
+std::pair<bool, std::vector<ARGEdge*>> map_genotype_to_ARG_approximate(
     ARG& arg, const std::vector<int>& genotype, arg_real_t pos, double maf_threshold);
+
+/**
+ * @brief Finds the highest carrier edge for a given leaf in an ARG, assuming all carriers are homozygous.
+ *
+ * This function is a simplified version of finding the highest carrier edge in an ARG, where it assumes
+ * that all carriers are homozygous. It delegates the task to the 'highest_carrier_edge_diploid' function
+ * by providing an empty list for heterozygous carriers.
+ *
+ * @param arg Reference to the ARG object.
+ * @param leaf_id The identifier of the leaf node from which the search begins.
+ * @param carriers A DescendantList object representing the homozygous carriers.
+ * @param pos The position in the genome associated with the mutation.
+ *
+ * @return A pair consisting of a pointer to the ARGEdge representing the highest carrier edge,
+ * and a DescendantList of the current carriers found up to that edge.
+ *
+ * @details The function calls 'highest_carrier_edge_diploid' with the provided list of carriers treated as
+ * homozygous and an empty list for heterozygous carriers. This is used in cases where the distinction
+ * between homozygous and heterozygous carriers is not necessary or the carriers are known to be homozygous.
+ */
+std::pair<ARGEdge*, DescendantList> highest_carrier_edge(
+    ARG& arg, int leaf_id, const DescendantList& carriers, arg_real_t pos);
+
+/**
+ * @brief Finds the highest carrier edge for a given leaf in a diploid ARG.
+ *
+ * This function traverses the ARG (Ancestral Recombination Graph) tree from a specified leaf upwards
+ * to find the highest edge where the leaf's mutation carriers are located. It differentiates between
+ * homozygous and heterozygous carriers.
+ *
+ * Homozygotes are defined as both chromosomes (id 2*l and 2*l+1) carrying a mutation, whereas
+ * heterozygotes have only one of the two chromosomes carrying a mutation.
+ *
+ * @param arg Reference to the ARG object.
+ * @param leaf_id The identifier of the leaf node from which the search begins.
+ * @param homozygotes A DescendantList object representing the homozygous carriers.
+ * @param heterozygotes A DescendantList object representing the heterozygous carriers.
+ * @param pos The position in the genome associated with the mutation.
+ *
+ * @throws std::runtime_error if no siblings are found for a given node, which might indicate the presence of unary nodes.
+ *
+ * @return A pair consisting of a pointer to the ARGEdge representing the highest carrier edge,
+ * and a DescendantList of the current carriers found up to that edge.
+ *
+ * @details The function performs a bottom-up traversal of the ARG tree, starting from the specified leaf.
+ * It combines homozygous and heterozygous carriers to identify the relevant mutation carriers.
+ * Special handling is done for double-heterozygotes to ensure accurate identification.
+ * The traversal stops when all carriers are found or when specific conditions are met (e.g., double-heterozygotes).
+ */
+std::pair<ARGEdge*, DescendantList> highest_carrier_edge_diploid(
+    ARG& arg, int leaf_id, const DescendantList& homozygotes, const DescendantList& heterozygotes, arg_real_t pos);
+
+/**
+ * @brief Finds the most recent common ancestor (MRCA) of a set of descendants in an ARG at a specific position.
+ *
+ * This function traverses an ancestral recombination graph (ARG) to find the MRCA of given descendants.
+ * It works by iteratively moving up the ARG from the descendants, aggregating sibling nodes until all descendants
+ * are accounted for, at which point the current node is the MRCA.
+ *
+ * @param arg A constant reference to the ARG object.
+ * @param descendants A DescendantList object representing the set of descendants for which the MRCA is sought.
+ * @param position The genomic position at which to find the MRCA.
+ *
+ * @return A pointer to the ARGNode that represents the MRCA at the specified position. Returns nullptr if the
+ * list of descendants is empty.
+ *
+ * @throws std::runtime_error if the ARG roots are empty, indicating that `populate_children_and_roots()` must be called first.
+ *
+ * @details The function first checks if the ARG's roots are populated. If not, an exception is thrown.
+ * If the descendants list is empty, it returns nullptr. If the descendants include all leaves in the ARG,
+ * the root of the ARG at the specified position is returned as the MRCA. Otherwise, it computes the MRCA by
+ * traversing the ARG tree upwards from the given descendants and aggregating their sibling nodes until all
+ * are accounted for.
+ *
+ * The process involves checking and updating descendants lists as it moves up the ARG, ensuring that the
+ * node where all original descendants have been encountered is identified as the MRCA.
+ */
+ARGNode* most_recent_common_ancestor(const ARG& arg, const DescendantList& descendants, arg_real_t position);
+
+/**
+ * @brief Populates scores related to genetic variant carriers in an ARG, updating a mutation mapping.
+ *
+ * This function processes a node within an ancestral recombination graph (ARG) to evaluate and update scores
+ * related to the distribution of carriers and non-carriers of a specific genetic variant (SNP) at a given position.
+ * It is designed for recursive traversal of the ARG to accumulate descendant information and calculate penalties.
+ *
+ * @param arg A constant reference to the ARG object.
+ * @param node A pointer to the ARGNode being processed.
+ * @param obs_carriers A DescendantList of observed carriers of the genetic variant.
+ * @param pos The genomic position at which the evaluation is performed.
+ * @param mutmap A reference to a RelateMutationMapping structure that is updated based on the node's evaluation.
+ *
+ * @return A DescendantList representing the descendants of the current node.
+ *
+ * @details The function works by:
+ *   - Identifying whether the current node is a leaf and processing accordingly.
+ *   - Recursively calling itself for child nodes, if the current node is not a leaf, to build up a DescendantList.
+ *   - Calculating intersections between descendants and carriers/non-carriers.
+ *   - Checking the consistency of the partitioning and throwing an error if inconsistencies are found.
+ *   - Calculating a node penalty based on the ratio of certain intersecting groups.
+ *   - Updating the mutation mapping (mutmap) if specific conditions based on intersections and penalties are met.
+ *
+ * @throws std::runtime_error if the sum of intersecting and non-intersecting groups does not equal the total number of
+ * individuals, indicating an error in partitioning.
+ */
+DescendantList populate_relate_scores_lazy(
+    const ARG& arg, const ARGNode* node, DescendantList& obs_carriers, arg_real_t pos, RelateMutationMapping& mutmap);
 
 } // namespace arg_utils
 

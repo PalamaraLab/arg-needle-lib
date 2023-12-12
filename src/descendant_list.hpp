@@ -42,7 +42,7 @@ class DescendantList {
 private:
   size_t n;
   static size_t threshold; // default value 64 defined in descendant_list.cpp
-  std::vector<int> ordered_ids;
+  mutable std::vector<int> ordered_ids;
   boost::dynamic_bitset<> db;
   bool using_bitset = false;
   void switch_to_db();
@@ -80,14 +80,15 @@ public:
    * @brief Retrieves the top element of the DescendantList.
    * @return The lowest ID, or index of the first set bit (if using the bitset storage).
    */
-  int peek();
+  [[nodiscard]] int peek() const;
+
   int get(const int i) const;
   void set(const int i, bool v);
   void add(const DescendantList& dList);
   void erase(const DescendantList& other);
   bool includes(DescendantList& other);
   DescendantList intersect(DescendantList& other);
-  const std::vector<int>& values();
+  const std::vector<int>& values() const;
   const boost::dynamic_bitset<>& bitset();
   DescendantList complement();
   std::size_t num_values() const;

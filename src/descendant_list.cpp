@@ -106,7 +106,7 @@ void DescendantList::switch_to_db() {
   }
 }
 
-int DescendantList::peek() {
+int DescendantList::peek() const{
   if (num_values() == 0) {
     throw std::runtime_error(THROW_LINE("No elements in descendant list."));
   }
@@ -275,7 +275,7 @@ DescendantList DescendantList::intersect(DescendantList& other) {
   return DescendantList(n, intersection);
 }
 
-const vector<int>& DescendantList::values() {
+const vector<int>& DescendantList::values() const{
   if (using_bitset) {
     ordered_ids.clear();
     for (size_t index = db.find_first(); index < n; index = db.find_next(index)) {

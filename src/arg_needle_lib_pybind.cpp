@@ -23,6 +23,7 @@
 #include "arg_utils.hpp"
 #include "descendant_list.hpp"
 #include "deserialization_params.hpp"
+#include "genotype_mapping.hpp"
 #include "mutation.hpp"
 #include "root.hpp"
 #include "site.hpp"
@@ -460,4 +461,20 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
         "Check for identical ARG visit output between slow and fast versions");
   m.def("time_efficient_visit", &arg_utils::time_efficient_visit, py::arg("arg"),
         py::arg("timing") = false, "Time efficient visit routine");
+
+    // Functions for genotype mapping
+    m.def("map_genotype_to_ARG", &arg_utils::map_genotype_to_ARG, py::arg("arg"),
+          py::arg("genotype"), py::arg("site_id"), "Maps a genotype to an ARG");
+    m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"),
+          py::arg("genotype"), py::arg("site_id"), "Maps a diploid genotype to an ARG");
+    m.def("map_genotype_to_ARG_approximate",
+          [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos, double maf_threshold) {
+              auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos, maf_threshold);
+              py::list py_edges;
+              for (auto *edge: result.second) {
+                  py_edges.append(*edge);
+              }
+              return py::make_tuple(result.first, py_edges);
+          }, py::arg("arg"), py::arg("genotype"), py::arg("pos"), py::arg("maf_threshold"),
+          "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
 }

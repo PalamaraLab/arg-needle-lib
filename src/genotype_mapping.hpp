@@ -59,6 +59,31 @@ struct RelateMutationMapping {
 void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, int site_id);
 
 /**
+ * @brief Maps a diploid genotype to an ancestral recombination graph (ARG).
+ *
+ * This function integrates diploid genotype information into a given ARG. It processes both homozygous and heterozygous genotypes
+ * by identifying and mapping carriers of mutations. The function requires the ARG to be pre-populated with children and roots.
+ *
+ * @param arg Reference to the ARG object to be modified.
+ * @param genotype A vector containing diploid genotype information, with values 0, 1, or 2.
+ * @param site_id The identifier for the site within the ARG.
+ *
+ * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called first).
+ * @throws std::invalid_argument if the size of the genotype vector is not exactly half the number of ARG leaves.
+ * @throws std::invalid_argument if mutations are carried by all samples, as this is currently unsupported.
+ * @throws std::runtime_error if genotype values are not 0, 1, or 2.
+ *
+ * @note This function does not support mutations carried by all samples (see issue #140). Genotype values must be 0 (non-carrier),
+ * 1 (heterozygous carrier), or 2 (homozygous carrier).
+ *
+ * @details The function first checks if the ARG has been properly initialized with roots. It then processes the diploid genotype
+ * to identify homozygous and heterozygous carriers. For each homozygous carrier, it locates the highest edge in the ARG associated
+ * with the mutation and updates the ARG by adding the mutation. The function then processes heterozygous carriers, determining
+ * the appropriate edge for mutation placement by comparing the number of carriers or the height difference between parent and child nodes.
+ */
+void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, int site_id);
+
+/**
  * @brief Maps a genotype to an ancestral recombination graph (ARG) approximately based on allele counts and frequencies.
  *
  * This function aims to approximate the mapping of a genotype to an ARG. It operates differently based on allele counts

@@ -470,11 +470,24 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
     m.def("map_genotype_to_ARG_approximate",
           [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos, double maf_threshold) {
               auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos, maf_threshold);
-              py::list py_edges;
-              for (auto *edge: result.second) {
-                  py_edges.append(*edge);
+              std::vector<ARGEdge> edges;
+              for (auto edge: result.second) {
+                  edges.push_back(*edge);
               }
-              return py::make_tuple(result.first, py_edges);
+              return py::make_tuple(result.first, edges);
           }, py::arg("arg"), py::arg("genotype"), py::arg("pos"), py::arg("maf_threshold"),
           "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
+    m.def("most_recent_common_ancestor",
+          [](ARG &arg, std::vector<int> descendants, double position) {
+              if (descendants.empty()) {
+                  throw std::runtime_error(THROW_LINE("Descendants list cannot be empty"));
+              }
+              DescendantList desc(arg.leaf_ids.size(), descendants.at(0));
+              for (int i = 1; i < descendants.size(); i++) {
+                  desc.set(descendants.at(i), true);
+              }
+              return arg_utils::most_recent_common_ancestor(arg, desc, position);
+          },
+          py::return_value_policy::reference, py::arg("arg"), py::arg("descendants"), py::arg("position"),
+          "Finds the most recent common ancestor of a set of descendants in an ARG at a specific position.");
 }

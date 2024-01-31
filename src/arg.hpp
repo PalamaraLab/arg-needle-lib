@@ -30,7 +30,6 @@
 #include "types.hpp"
 
 #include <deque>
-#include <iostream>
 #include <memory>
 #include <random>
 #include <set>
@@ -49,16 +48,22 @@ private:
     /**
      * @brief map from physical position to sites containing mutations
      */
-    std::map<arg_real_t, Site> mutation_sites;
+    mutable std::map<arg_real_t, Site> mutation_sites;
+
+    /**
+     * @brief sorted vector of site positions
+     */
+    mutable std::vector<arg_real_t> site_positions;
 
     /**
       * @brief whether the mutation sites map is up to date or not
       */
-    bool mutation_sites_up_to_date = true;
+    mutable bool mutation_sites_up_to_date = true;
 
-
-    std::vector<arg_real_t> sites; // sorted vector of site positions
-    void clear_sites();
+    /**
+      * @brief whether the site positions vector is up to date or not
+      */
+    mutable bool site_positions_up_to_date = true;
 
     void process_ancestor_entry(std::stack<AncestorEntry>& entries);
     void populate_children();
@@ -80,6 +85,16 @@ private:
     // is always sorted
     std::vector<std::unique_ptr<Mutation>> mutations;
 
+    /**
+     * @brief update the map between site positions and mutaitons.
+     */
+    void update_mutation_sites() const;
+
+    /**
+     * @brief update the vector of site positions.
+     */
+    void update_site_positions() const;
+
 public:
     bool fragmented = false; // for now, keep this false
     arg_real_t start, end;
@@ -95,7 +110,7 @@ public:
 
     // Constructor used by deserialization to create an empty ARG that data is added to a chunk at a
     // time
-    ARG(const DeserializationParams& dp);
+    explicit ARG(const DeserializationParams& dp);
 
     ARG(arg_real_t _start, arg_real_t _end, int _reserved_samples = 0);
 
@@ -117,9 +132,6 @@ public:
 
     void set_offset(int _offset);
     void set_chromosome(int _chromosome);
-    void set_sites(const std::vector<arg_real_t> positions);
-    arg_real_t get_site(int site_id) const;
-    int get_id_of_closest_site(arg_real_t position) const;
     std::vector<std::unique_ptr<Mutation>>::const_iterator next_mutation(arg_real_t pos) const;
     bool is_leaf(int node_id) const;
     int add_sample(std::string sample_name = "");
@@ -144,7 +156,7 @@ public:
     int num_nodes() const;
     int num_edges() const;
     int num_mutations() const;
-    int num_sites() const;
+    std::size_t get_num_sites() const;
     // Check these things at any time, throws exception if incorrect
     void check_basic(bool stringent = true) const;
     // Check these things after populating roots, throws exception if incorrect
@@ -179,16 +191,16 @@ public:
                                    const std::vector<std::vector<int>>& edge_ids);
 
     /**
-     * @brief get reference to the sorted list of sites
-     *
-     */
-    const std::vector<arg_real_t>& get_sites() const;
-
-    /**
-     * @brief get reference to the sorted list of sites
+     * @brief get map between positions and sites, updating that map if necessary
      * @return the map from physical position to sites with mutations
      */
-    const std::map<arg_real_t, Site>& get_mutation_sites();
+    const std::map<arg_real_t, Site>& get_mutation_sites() const;
+
+    /**
+     * @brief get a reference to the sorted vector of site positions, updating that vector if necessary
+     * @return the sorted vector of site positions
+     */
+    const std::vector<arg_real_t>& get_site_positions() const;
 
     /**
      * @brief add a mutation to the vector of mutations, ensuring the vector remains sorted

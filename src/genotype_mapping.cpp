@@ -33,7 +33,7 @@ void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, 
 
     // Jot down all the carriers of the mutation
     DescendantList carriers(num_leaves, genotype);
-    const arg_real_t pos = arg.get_sites()[site_id];
+    const arg_real_t pos = arg.get_site_positions()[site_id];
     if (carriers.num_values() >= num_leaves) {
         throw std::invalid_argument(THROW_LINE(
                                             "Mutations carried by all samples are currently not supported. See issue #140."));
@@ -127,7 +127,7 @@ void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &ge
         throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
     }
     std::size_t n = arg.leaf_ids.size();
-    arg_real_t pos = arg.get_sites()[site_id];
+    arg_real_t pos = arg.get_site_positions()[site_id];
 
     if (genotype.size() != n / 2) {
         throw std::invalid_argument(

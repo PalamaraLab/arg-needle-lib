@@ -305,10 +305,8 @@ void ARG::deserialize_add_mutations(const std::vector<arg_real_t>& positions,
 
     add_mutation(edge_ptr, positions.at(i), heights.at(i), site_ids.at(i));
   }
-}
-
-const std::vector<arg_real_t>& ARG::get_sites() const {
-  return sites;
+  update_mutation_sites();
+  update_site_positions();
 }
 
 void ARG::add_mutation(ARGEdge* edge, const arg_real_t position, const arg_real_t height,
@@ -326,6 +324,7 @@ void ARG::add_mutation(ARGEdge* edge, const arg_real_t position, const arg_real_
   }
 
   mutation_sites_up_to_date = false;
+  site_positions_up_to_date = false;
 }
 
 void ARG::reserve_n_mutations(const std::size_t num_mutations) {
@@ -454,68 +453,6 @@ void ARG::set_chromosome(int _chromosome) {
     throw std::logic_error(THROW_LINE("Chromosome must be a positive integer."));
   }
   chromosome = _chromosome;
-}
-
-void ARG::clear_sites() {
-  // this invalidates all previous sites, so set site_id for all mutations to -1
-  for (auto& m : mutations) {
-    m->site_id = -1;
-  }
-  sites.clear();
-}
-
-void ARG::set_sites(const vector<arg_real_t> positions) {
-  for (size_t i = 0; i < positions.size(); ++i) {
-    if (i > 0 && positions[i - 1] >= positions[i]) {
-      throw std::logic_error(THROW_LINE("Positions must be strictly increasing."));
-    }
-    if (positions[i] < start || positions[i] >= end) {
-      throw std::logic_error(THROW_LINE("Position must lie in ARG range."));
-    }
-  }
-
-  clear_sites();
-  sites = positions; // makes a copy
-}
-
-arg_real_t ARG::get_site(int site_id) const {
-  if (site_id < 0 || site_id >= num_sites()) {
-    throw std::logic_error(
-        THROW_LINE("Must index into " + std::to_string(num_sites()) + " sites."));
-  }
-  return sites[site_id];
-}
-
-int ARG::get_id_of_closest_site(arg_real_t position) const {
-  if (position < start || position >= end) {
-    throw std::logic_error(THROW_LINE("Position must lie in ARG range."));
-  }
-
-  if (sites.size() == 0) {
-    return -1;
-  }
-
-  // search is O(log S) where S is number of sites
-  auto greater_it = std::upper_bound(sites.begin(), sites.end(), position);
-  // at this point, *(greater_it) > pos or greater_it = sites.end()
-  if (greater_it == sites.begin()) {
-    return 0;
-  }
-  else if (greater_it == sites.end()) {
-    return sites.size() - 1;
-  }
-  else {
-    arg_real_t greater_site_pos = *greater_it;
-    auto lesser_it = std::prev(greater_it);
-    arg_real_t lesser_site_pos = *lesser_it;
-
-    if (std::abs(position - lesser_site_pos) < std::abs(position - greater_site_pos)) {
-      return std::distance(sites.begin(), lesser_it);
-    }
-    else {
-      return std::distance(sites.begin(), greater_it);
-    }
-  }
 }
 
 bool ARG::is_leaf(int node_id) const {
@@ -748,7 +685,8 @@ ARGEdge* ARG::lowest_mutated_edge(int haploid_id, arg_real_t position) {
 
 // Find lowest branch that carries mutation for chromosome ID searching by site ID
 ARGEdge* ARG::lowest_mutated_edge_by_site(int haploid_id, int site_id) {
-  return lowest_mutated_edge(haploid_id, sites[site_id]);
+  update_site_positions();
+  return lowest_mutated_edge(haploid_id, site_positions[site_id]);
 }
 
 const ARGNode* ARG::mrca(int ID1, int ID2, arg_real_t position) const {
@@ -883,8 +821,8 @@ int ARG::num_mutations() const {
   return mutations.size();
 }
 
-int ARG::num_sites() const {
-  return sites.size();
+std::size_t ARG::get_num_sites() const {
+  return site_positions.size();
 }
 
 // Re-compute stats from the ARG
@@ -1395,19 +1333,49 @@ void ARG::process_ancestor_entry(stack<AncestorEntry>& entries) {
   }
 }
 
-const map<arg_real_t, Site>& ARG::get_mutation_sites() {
+const map<arg_real_t, Site>& ARG::get_mutation_sites() const
+{
+  update_mutation_sites();
+  return mutation_sites;
+}
+
+void ARG::update_mutation_sites() const
+{
   // This map will be out od date if we have modified the mutation vector
   if (!mutation_sites_up_to_date) {
     mutation_sites.clear();
     // Re-create the map by iterating over all mutations
     for (const auto& mutation : mutations) {
       const arg_real_t position = mutation->position;
-      auto site_iter = mutation_sites.try_emplace(mutation_sites.end(), position);
+      const auto site_iter = mutation_sites.try_emplace(mutation_sites.end(), position);
       Site& site = site_iter->second;
       site.add_mutation(mutation.get());
     }
     // The map is now definitely up-to-date
     mutation_sites_up_to_date = true;
   }
-  return mutation_sites;
+}
+
+const std::vector<arg_real_t>& ARG::get_site_positions() const
+{
+  update_site_positions();
+  return site_positions;
+}
+
+void ARG::update_site_positions() const
+{
+  // This vector may be out od date if we have modified the mutation vector
+  if (!site_positions_up_to_date) {
+    // Can't use mutation_sites directly as it might be out-of-date
+    const auto& mutation_sites_updated = get_mutation_sites();
+
+    site_positions.clear();
+    site_positions.reserve(mutation_sites_updated.size());
+
+    for (const auto& [key, val] : mutation_sites_updated) {
+      site_positions.push_back(key);
+    }
+
+    site_positions_up_to_date = true;
+  }
 }

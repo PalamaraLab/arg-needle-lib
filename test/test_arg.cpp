@@ -25,9 +25,11 @@
 
 #include <sstream>
 #include <vector>
+#include <boost/iostreams/filter/zlib.hpp>
 
 
-TEST_CASE("Finding mutations left") {
+TEST_CASE("Finding mutations left")
+{
 
   SECTION("Empty mutation vector") {
     ARG arg = ARG(0, 100);
@@ -240,6 +242,7 @@ TEST_CASE("Test mutation_sites map") {
   SECTION("Empty mutation vector") {
     ARG arg = ARG(0, 100);
     CHECK(arg.get_mutation_sites().empty());
+    CHECK(arg.get_site_positions().empty());
   }
 
   SECTION("Multiple mutations in vector") {
@@ -249,8 +252,11 @@ TEST_CASE("Test mutation_sites map") {
     arg.add_mutation(nullptr, 2.0);
     arg.add_mutation(nullptr, 3.0);
 
-    const std::map<arg_real_t, Site> mutation_sites = arg.get_mutation_sites();
+    std::map<arg_real_t, Site> mutation_sites = arg.get_mutation_sites();
     CHECK(mutation_sites.size() == 3ul);
+
+    std::vector<arg_real_t> site_positions = arg.get_site_positions();
+    CHECK(site_positions.size() == 3ul);
 
     CHECK(mutation_sites.at(1.0).get_mutations().size() == 1ul);
     CHECK(mutation_sites.at(1.0).get_mutations().front()->position == 1.0);
@@ -263,6 +269,22 @@ TEST_CASE("Test mutation_sites map") {
     CHECK(mutation_sites.at(3.0).get_mutations().size() == 1ul);
     CHECK(mutation_sites.at(3.0).get_mutations().front()->position == 3.0);
     CHECK(mutation_sites.at(3.0).get_position() == 3.0);
+
+    CHECK(site_positions.at(0ul) == 1.0);
+    CHECK(site_positions.at(1ul) == 2.0);
+    CHECK(site_positions.at(2ul) == 3.0);
+
+    // Add another mutation and check we're still OK
+    arg.add_mutation(nullptr, 1.5);
+    mutation_sites = arg.get_mutation_sites();
+    site_positions = arg.get_site_positions();
+
+    CHECK(mutation_sites.at(1.5).get_mutations().size() == 1ul);
+
+    CHECK(site_positions.at(0ul) == 1.0);
+    CHECK(site_positions.at(1ul) == 1.5);
+    CHECK(site_positions.at(2ul) == 2.0);
+    CHECK(site_positions.at(3ul) == 3.0);
   }
 
   SECTION("Multiple mutations at a single site") {
@@ -279,6 +301,9 @@ TEST_CASE("Test mutation_sites map") {
     const std::map<arg_real_t, Site> mutation_sites = arg.get_mutation_sites();
     CHECK(mutation_sites.size() == 4ul);
 
+    const std::vector<arg_real_t> site_positions = arg.get_site_positions();
+    CHECK(site_positions.size() == 4ul);
+
     CHECK(mutation_sites.at(1.0).get_mutations().size() == 2ul);
     CHECK(mutation_sites.at(1.0).get_mutations().at(0)->position == 1.0);
     CHECK(mutation_sites.at(1.0).get_mutations().at(1)->position == 1.0);
@@ -293,5 +318,10 @@ TEST_CASE("Test mutation_sites map") {
 
     CHECK(mutation_sites.at(4.0).get_mutations().size() == 1ul);
     CHECK(mutation_sites.at(4.0).get_mutations().at(0)->position == 4.0);
+
+    CHECK(site_positions.at(0ul) == 1.0);
+    CHECK(site_positions.at(1ul) == 2.0);
+    CHECK(site_positions.at(2ul) == 3.0);
+    CHECK(site_positions.at(3ul) == 4.0);
   }
 }

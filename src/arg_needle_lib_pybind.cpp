@@ -190,7 +190,7 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def("num_nodes", &ARG::num_nodes)
       .def("num_edges", &ARG::num_edges)
       .def("num_mutations", &ARG::num_mutations)
-      .def("num_sites", &ARG::num_sites)
+      .def("get_num_sites", &ARG::get_num_sites)
       .def(
           "num_samples", [](const ARG& arg) { return arg.leaf_ids.size(); },
           "Return number of samples")
@@ -198,13 +198,10 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def_readonly("sample_names", &ARG::sample_names) // unsorted
       .def("set_offset", &ARG::set_offset, py::arg("offset"))
       .def("set_chromosome", &ARG::set_chromosome, py::arg("chromosome"))
-      .def("set_sites", &ARG::set_sites, py::arg("positions"))
-      .def("get_site", &ARG::get_site, py::arg("site_id"))
-      // A sorted list of physical positions
-      .def("get_sites", &ARG::get_sites, py::return_value_policy::reference)
       // A map from each physical position (key) to a site object containing all mutations at that position (value)
       .def("get_mutation_sites", &ARG::get_mutation_sites, py::return_value_policy::reference)
-      .def("get_id_of_closest_site", &ARG::get_id_of_closest_site, py::arg("position"))
+      // A sorted list of physical positions
+      .def("get_site_positions", &ARG::get_site_positions, py::return_value_policy::reference)
       .def("add_sample", &ARG::add_sample, py::arg("sample_name") = "")
       .def("is_leaf", &ARG::is_leaf, py::arg("node_id"))
       .def("thread_sample", &ARG::thread_sample, py::arg("section_starts"), py::arg("sample_ids"),
@@ -240,7 +237,9 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
            py::arg("physical_pos"), py::arg("include_equal") = false,
            py::arg("warn_out_of_range") = true)
       .def("get_idx_of_mutation_closest_to", &ARG::get_idx_of_mutation_closest_to,
-           py::arg("physical_pos"));
+           py::arg("physical_pos"))
+      .def("clear_mutations", &ARG::clear_mutations)
+      .def("clear_mutations_from_edges", &ARG::clear_mutations_from_edges);
 
   py::class_<DescendantList>(m, "DescendantList")
       .def_static(

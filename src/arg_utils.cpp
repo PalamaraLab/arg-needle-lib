@@ -214,11 +214,11 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
   if (arg.num_mutations() > 0) {
     int num_sites_in_range = 0;
     vector<arg_real_t> positions;
-    positions.reserve(arg.num_sites());
+    positions.reserve(arg.get_num_sites());
     vector<arg_real_t> heights;
-    heights.reserve(arg.num_sites());
+    heights.reserve(arg.get_num_sites());
     vector<vector<int>> mutation_edge_ids;
-    mutation_edge_ids.reserve(arg.num_sites());
+    mutation_edge_ids.reserve(arg.get_num_sites());
 
     for (auto const& entry : arg.get_mutations()) {
       auto mutation = entry.get();
@@ -235,7 +235,6 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
     // fill site_ids as default
     std::iota(site_ids.begin(), site_ids.end(), 0);
     trimmed_arg.deserialize_add_mutations(positions, heights, site_ids, mutation_edge_ids);
-    trimmed_arg.set_sites(positions);
   }
   return trimmed_arg;
 }

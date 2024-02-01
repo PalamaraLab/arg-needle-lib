@@ -303,18 +303,17 @@ void ARG::deserialize_add_mutations(const std::vector<arg_real_t>& positions,
       throw std::logic_error(THROW_LINE("Could not find correct edge for serialized mutation."));
     }
 
-    add_mutation(edge_ptr, positions.at(i), heights.at(i), site_ids.at(i));
+    add_mutation(edge_ptr, positions.at(i), heights.at(i), site_ids.at(i), false);
   }
-  update_mutation_sites();
-  update_site_positions();
+  update_site_data_structures();
 }
 
 void ARG::add_mutation(ARGEdge* edge, const arg_real_t position, const arg_real_t height,
-                       const int site_id) {
+    const int site_id, const bool update_data_structures)
+{
   if (mutations.empty() || position >= mutations.back()->position) {
     mutations.emplace_back(std::make_unique<Mutation>(edge, position, height, site_id));
-  }
-  else {
+  } else {
     auto mut_it = std::lower_bound(
         mutations.begin(), mutations.end(), std::make_unique<Mutation>(nullptr, position),
         [](const std::unique_ptr<Mutation>& lhs, const std::unique_ptr<Mutation>& rhs) {
@@ -325,7 +324,18 @@ void ARG::add_mutation(ARGEdge* edge, const arg_real_t position, const arg_real_
 
   mutation_sites_up_to_date = false;
   site_positions_up_to_date = false;
+
+  if (update_data_structures) {
+    update_site_data_structures();
+  }
 }
+
+void ARG::update_site_data_structures() const
+{
+  update_mutation_sites();
+  update_site_positions();
+}
+
 
 void ARG::reserve_n_mutations(const std::size_t num_mutations) {
   mutations.reserve(num_mutations);

@@ -203,10 +203,43 @@ public:
     const std::vector<arg_real_t>& get_site_positions() const;
 
     /**
-     * @brief add a mutation to the vector of mutations, ensuring the vector remains sorted
+     * @brief Adds a new mutation to the ARG at a given position, height, and site ID.
      *
+     * This function inserts a mutation into the ARG's list of mutations. It is inserted in a position
+     * that maintains the sorted order of mutations by position. The function can also update related
+     * data structures to reflect the addition of the new mutation.
+     *
+     * @param edge Pointer to the ARGEdge where the mutation occurred. This edge connects the mutation
+     *     to the rest of the ARG.
+     * @param position The physical position on the ARG where the mutation occurred. Mutations are
+     *     ordered by this value.
+     * @param height The height of the mutation on the ARG. This parameter is used to determine the
+     *     mutation's temporal position.
+     * @param site_id An integer representing the site ID associated with the mutation. This ID is
+     *     used to link the mutation to a specific genomic site.
+     * @param update_data_structures If true, the method updates internal data structures related to
+     *     mutation sites and site positions. If false, it marks these data structures as out of date.
+     *
+     * @note If the `mutations` list is initially empty or if the new mutation's position is not less
+     *     than any existing mutation's position, the new mutation is simply appended to the list.
+     *     Otherwise, a binary search is performed to find the correct insertion point to maintain
+     *     order.
+     * @note If you are adding multiple mutations in quick succession, for efficiency you should set
+     *     update_data_structures to false, and then call update_site_data_structures().
      */
-    void add_mutation(ARGEdge* edge, arg_real_t position, arg_real_t height = -1.0, int site_id = -1);
+    void add_mutation(ARGEdge* edge, arg_real_t position, arg_real_t height = -1.0, int site_id = -1,
+                      bool update_data_structures = true);
+
+    /**
+     * @brief Upadte the data structurs related to mutation sites.
+     *
+     * This method updates the map between Positions and Sites (mutation_sites) and the vector of
+     * sorted site positions (site_positions). This method is mostly an internal detail, but, may
+     * be used if you are adding multiple mutations using add_mutation with parameter
+     * update_data_structures set to false, after which a single call to this method will efficiently
+     * update the structures.
+     */
+    void update_site_data_structures() const;
 
     /**
      * @brief reserve space in the mutation vector if you know you will be adding many mutations

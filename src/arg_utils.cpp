@@ -622,8 +622,9 @@ void generate_mutations(ARG& arg, arg_real_t mu, unsigned random_seed, std::size
   arg.reserve_n_mutations(new_mutations.size());
   std::sort(new_mutations.begin(), new_mutations.end());
   for (const auto& mut : new_mutations) {
-    arg.add_mutation(mut.edge, mut.position, mut.height);
+    arg.add_mutation(mut.edge, mut.position, mut.height, -1, false);
   }
+  arg.update_site_data_structures();
 }
 
 // Generate exactly M mutations with the following steps:
@@ -693,8 +694,9 @@ void generate_m_mutations(ARG& arg, int m, unsigned random_seed) {
   arg.reserve_n_mutations(new_mutations.size());
   std::sort(new_mutations.begin(), new_mutations.end());
   for (const auto& mut : new_mutations) {
-    arg.add_mutation(mut.edge, mut.position, mut.height);
+    arg.add_mutation(mut.edge, mut.position, mut.height, -1, false);
   }
+  arg.update_site_data_structures();
 
   // Check that we have exactly m mutations!
   assert(arg.num_mutations() == m);

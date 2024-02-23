@@ -112,9 +112,6 @@ def test_round_trips():
 
     arg_original = arg_needle_lib.tskit_to_arg(ts)
 
-    # Add sites
-    arg_original.set_sites([1.23, 2.34, 3.45, 4.56])
-
     arg_needle_lib.serialize_arg(arg_original, "round_trip_1.arg")
     arg_deserialized = arg_needle_lib.deserialize_arg("round_trip_1.arg")
     arg_needle_lib.serialize_arg(arg_deserialized, "round_trip_2.arg")
@@ -125,7 +122,6 @@ def test_round_trips():
     # Check that both ARG objects in memory are the same
     assert arg_original.num_nodes() == arg_deserialized.num_nodes()
     assert arg_original.num_edges() == arg_deserialized.num_edges()
-    assert np.allclose(arg_original.get_sites(), arg_deserialized.get_sites())
 
     for node_idx in range(arg_original.num_nodes()):
         node_old = arg_original.node(node_idx)
@@ -154,7 +150,6 @@ def test_round_trips():
     assert np.allclose(f1['times'][...], f2['times'][...])
     assert np.allclose(f1['edge_ids'][...], f2['edge_ids'][...])
     assert np.allclose(f1['edge_ranges'][...], f2['edge_ranges'][...])
-    assert np.allclose(f1['sites'][...], f2['sites'][...])
 
     f1.close()
     f2.close()

@@ -36,7 +36,7 @@ __all__ = [
 
 
 def serialize_arg(arg_to_serialize: arg_needle_lib.ARG, file_name: str = "arg.arg", chunk_size: int = 1000,
-                  compression='gzip', compression_opts=None, node_bounds=True, mutations=None, sites=None):
+                  compression='gzip', compression_opts=None, node_bounds=True, mutations=None):
     """
     Serialize ARG to disk using HDF5.
 
@@ -56,11 +56,9 @@ def serialize_arg(arg_to_serialize: arg_needle_lib.ARG, file_name: str = "arg.ar
             `compression != 'gzip'`
         node_bounds: whether to serialize node start/end positions. Default: True
         mutations: whether to serialize mutations. Default: True if num_mutations > 0, otherwise False
-        sites: whether to serialize sites. Default: True if sites present, otherwise False
     """
     num_nodes = arg_to_serialize.num_nodes()
     num_edges = arg_to_serialize.num_edges()
-    num_sites = arg_to_serialize.num_sites()
     num_mutations = arg_to_serialize.num_mutations()
 
     # By default, serialize mutations if they exist, but this will not happen if set to False
@@ -73,23 +71,11 @@ def serialize_arg(arg_to_serialize: arg_needle_lib.ARG, file_name: str = "arg.ar
         )
         mutations = False
 
-    # By default, serialize sites if they exist, but this will not happen if set to False
-    if sites is None:
-        sites = num_sites > 0
-
-    if sites and num_sites == 0:
-        print(
-            f'WARNING: serialization parameter `sites` is {sites} but the ARG contains no sites. Setting `sites` to False'
-        )
-        sites = False
-
     # Create the hdf5 file, write attributes and create datasets for nodes and edges
     f = h5py.File(file_name, "w")
     f.attrs['num_nodes'] = num_nodes
     f.attrs['num_edges'] = num_edges
-    f.attrs['num_sites'] = num_sites
     f.attrs['node_bounds'] = node_bounds
-    f.attrs['sites'] = sites
     f.attrs['num_mutations'] = num_mutations
     f.attrs['mutations'] = mutations
     f.attrs['offset'] = arg_to_serialize.offset
@@ -183,19 +169,6 @@ def serialize_arg(arg_to_serialize: arg_needle_lib.ARG, file_name: str = "arg.ar
 
     assert num_nodes_written == num_nodes
     assert num_edges_written == num_edges
-
-    # Write sites if required
-    if sites:
-        if compression is None:
-            dset_sites = f.create_dataset("sites", (num_sites,), dtype=np.double)
-        else:
-            if compression == 'gzip' and compression_opts is None:
-                compression_opts = 9
-
-            dset_sites = f.create_dataset("sites", (num_sites,), dtype=np.double, compression=compression,
-                                          compression_opts=compression_opts)
-        
-        dset_sites[...] = arg_to_serialize.get_sites()
 
     # Write mutations if required
     if mutations:
@@ -337,10 +310,6 @@ def _deserialize_arg_v2(file_name: str, chunk_size: int = 1000, reserved_samples
         arg.deserialize_add_edges(edge_ids, edge_ranges)
 
         num_edges_written += range_len
-    
-    # Add the sites; not necessary to do this in chunks
-    if f.attrs['sites']:
-        arg.set_sites(f['sites'][...])
 
     if f.attrs['mutations']:
 
@@ -445,7 +414,7 @@ def _validate_serialized_arg_v2(file_name: str):
         whether the serialized ARG file is valid
     """
 
-    expected_attrs = ['num_nodes', 'num_edges', 'num_sites', 'node_bounds', 'sites', 'num_mutations', 'mutations',
+    expected_attrs = ['num_nodes', 'num_edges', 'node_bounds', 'num_mutations', 'mutations',
                       'offset', 'chromosome', 'start', 'end', 'threaded_samples', 'datetime_created',
                       'arg_file_version']
     expected_dsets = ['flags', 'times', 'edge_ranges', 'edge_ids']
@@ -459,12 +428,6 @@ def _validate_serialized_arg_v2(file_name: str):
         for dset in expected_dsets:
             if dset not in f.keys():
                 print(f'Expected file {file_name} to include dataset `{dset}`')
-                return False
-        
-        # Optional datasets
-        if f.attrs['sites']:
-            if 'sites' not in f.keys():
-                print(f'Expected file {file_name} to include dataset `sites`')
                 return False
 
         if f.attrs['mutations']:

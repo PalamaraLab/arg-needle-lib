@@ -35,7 +35,7 @@ def test_map_genotypes_small():
     # 0.00┊ 0 2 1 3 ┊
     #     0         1
     arg = arg_needle_lib.tskit_to_arg(ts)
-    arg.set_sites([.1, .2, .3, .4, .5])
+    positions = [.1, .2, .3, .4]
     genotypes = [
         [0, 1, 1, 0],
         [1, 0, 1, 0],
@@ -49,22 +49,22 @@ def test_map_genotypes_small():
     arg.populate_children_and_roots()
 
     # Check mutations are correctly inserted
-    for i, g in enumerate(genotypes):
-        arg_needle_lib.map_genotype_to_ARG(arg, g, i)
+    for pos, g in zip(positions, genotypes):
+        arg_needle_lib.map_genotype_to_ARG(arg, g, pos)
 
-    me_0 = [m.edge for m in arg.mutations() if m.site_id == 0]
+    me_0 = [m.edge for m in arg.mutations() if m.position == .1]
     expected_nodes_0 = {(2, 4), (1, 5)}
     assert set([(m.child.ID, m.parent.ID) for m in me_0]) == expected_nodes_0
 
-    me_1 = [m.edge for m in arg.mutations() if m.site_id == 1]
+    me_1 = [m.edge for m in arg.mutations() if m.position == .2]
     expected_nodes_1 = {(4, 6)}
     assert set([(m.child.ID, m.parent.ID) for m in me_1]) == expected_nodes_1
 
-    me_2 = [m.edge for m in arg.mutations() if m.site_id == 2]
+    me_2 = [m.edge for m in arg.mutations() if m.position == .3]
     expected_nodes_2 = {(0, 4), (5, 6)}
     assert set([(m.child.ID, m.parent.ID) for m in me_2]) == expected_nodes_2
 
-    me_3 = [m.edge for m in arg.mutations() if m.site_id == 3]
+    me_3 = [m.edge for m in arg.mutations() if m.position == .4]
     assert len(me_3) == 0
 
     # Check we halt on mutation carried by all which would segfault otherwise
@@ -83,12 +83,11 @@ def test_map_genotypes_big():
     sites = [s.position for s in ts.sites()]
 
     arg = arg_needle_lib.tskit_to_arg(ts)
-    arg.set_sites(sites)
     arg.populate_children_and_roots()
 
     # Add genotypes
-    for i, g in enumerate(G):
-        arg_needle_lib.map_genotype_to_ARG(arg, g, i)
+    for pos, g in zip(sites, G):
+        arg_needle_lib.map_genotype_to_ARG(arg, g, pos)
 
     # For now just make sure we've added the right number of mutations.
     # Can test for accuracy once we have merged PR #137
@@ -113,7 +112,7 @@ def test_map_diploid_genotypes_small():
     # 0.00┊ 0 4 1 3 2 5 ┊
     #     0             1
     arg = arg_needle_lib.tskit_to_arg(ts)
-    arg.set_sites([.1, .2, .3, .4, .5])
+    positions = [.1, .2, .3, .4, .5]
     genotypes = [
         [1, 2, 2],
         [2, 0, 0],
@@ -123,26 +122,26 @@ def test_map_diploid_genotypes_small():
     arg.populate_children_and_roots()
 
     # Check mutations are correctly inserted
-    for i, g in enumerate(genotypes):
-        arg_needle_lib.map_genotype_to_ARG_diploid(arg, g, i)
+    for pos, g in zip(positions, genotypes):
+        arg_needle_lib.map_genotype_to_ARG_diploid(arg, g, pos)
 
-    me_0 = [m.edge for m in arg.mutations() if m.site_id == 0]
+    me_0 = [m.edge for m in arg.mutations() if m.position == positions[0]]
     expected_nodes_0 = [{(9, 10), (7, 8), (3, 6)}, {(9, 10), (6, 8), (4, 7)}]
     assert set([(m.child.ID, m.parent.ID) for m in me_0]) in expected_nodes_0
 
-    me_1 = [m.edge for m in arg.mutations() if m.site_id == 1]
+    me_1 = [m.edge for m in arg.mutations() if m.position == positions[1]]
     expected_nodes_1 = {(1, 6), (0, 7)}
     assert set([(m.child.ID, m.parent.ID) for m in me_1]) == expected_nodes_1
 
-    me_2 = [m.edge for m in arg.mutations() if m.site_id == 2]
+    me_2 = [m.edge for m in arg.mutations() if m.position == positions[2]]
     expected_nodes_2 = [{(6, 8), (5, 9)}, {(0, 7), (9, 10)}, {(7, 8), (2, 9)}]
     assert set([(m.child.ID, m.parent.ID) for m in me_2]) in expected_nodes_2
 
-    me_3 = [m.edge for m in arg.mutations() if m.site_id == 3]
+    me_3 = [m.edge for m in arg.mutations() if m.position == positions[3]]
     expected_nodes_3 = {(3, 6), (4, 7), (9, 10)}
     assert set([(m.child.ID, m.parent.ID) for m in me_3]) == expected_nodes_3
 
-    me_4 = [m.edge for m in arg.mutations() if m.site_id == 4]
+    me_4 = [m.edge for m in arg.mutations() if m.position == positions[4]]
     expected_nodes_4 = {(8, 10)}
     assert set([(m.child.ID, m.parent.ID) for m in me_4]) == expected_nodes_4
 
@@ -177,24 +176,24 @@ def test_map_genotypes_approximate():
     # 0.00┊ 0 4 8 7 2 3 1 5 6 9 ┊
     #     0                     1
     arg = arg_needle_lib.tskit_to_arg(ts)
-    arg.set_sites([.1, .2, .3, .4, .5])
+    positions = [.1, .2, .3, .4, .5]
     arg.populate_children_and_roots()
     # import pdb
     # pdb.set_trace()
     genotype1 = [1, 0, 1, 0, 1, 0, 0, 1, 1, 0]
-    flipped1, map1 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype1, 0.0, 0.4)
+    flipped1, map1 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype1, positions[0], 0.4)
     assert not flipped1
     assert len(map1) == 0
     genotype2 = [1, 0, 1, 1, 1, 0, 0, 1, 1, 0]
-    flipped2, map2 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype2, 0.0, 0.4)
+    flipped2, map2 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype2, positions[1], 0.4)
     assert flipped2
     assert map2[0].child.ID == 15
     genotype3 = [1, 0, 0, 0, 1, 0, 0, 1, 1, 0]
-    flipped3, map3 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype3, 0.0, 0.4)
+    flipped3, map3 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype3, positions[2], 0.4)
     assert not flipped3
     assert map3[0].child.ID == 13
     genotype4 = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
-    flipped4, map4 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype4, 0.0, 0.4)
+    flipped4, map4 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype4, positions[3], 0.4)
     assert not flipped4
     assert len(map4) == 2
 

@@ -230,6 +230,8 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
            py::arg("is_sample"), py::arg("node_bounds") = std::vector<std::vector<arg_real_t>>{})
       .def("deserialize_add_edges", &ARG::deserialize_add_edges)
       .def("deserialize_add_mutations", &ARG::deserialize_add_mutations)
+      .def("add_mutation", &ARG::add_mutation, py::arg("edge"), py::arg("position"), py::arg("height") = -1.0,
+          py::arg("site_id") = -1, py::arg("update_data_structures") = false)
       .def("get_idx_of_first_mutation_left_of", &ARG::get_idx_of_first_mutation_left_of,
            py::arg("physical_pos"), py::arg("include_equal") = false,
            py::arg("warn_out_of_range") = true)

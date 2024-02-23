@@ -121,6 +121,6 @@ def test_trimmed_tree_with_mutations():
 
     for i, m in enumerate(trimmed_arg.mutations()):
         assert m.position == positions[i]
-        assert trimmed_arg.get_site(i) == positions[i]
+        assert trimmed_arg.get_site_positions()[i] == positions[i]
         assert m.height == heights[i]
         assert (m.edge.child.ID, m.edge.parent.ID) == node_ids[i]

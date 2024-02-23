@@ -24,7 +24,7 @@
 #include "utils.hpp"
 
 
-void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, int site_id) {
+void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, const arg_real_t pos) {
     if (arg.roots.empty()) {
         throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
     }
@@ -33,7 +33,6 @@ void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, 
 
     // Jot down all the carriers of the mutation
     DescendantList carriers(num_leaves, genotype);
-    const arg_real_t pos = arg.get_site_positions()[site_id];
     if (carriers.num_values() >= num_leaves) {
         throw std::invalid_argument(THROW_LINE(
                                             "Mutations carried by all samples are currently not supported. See issue #140."));
@@ -44,7 +43,7 @@ void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, 
     while (carriers.num_values() > 0) {
         const int leaf_id = carriers.peek();
         std::tie(edge, current_carriers) = highest_carrier_edge(arg, leaf_id, carriers, pos);
-        arg.add_mutation(edge, pos, -1, site_id);
+        arg.add_mutation(edge, pos);
         carriers.erase(current_carriers);
     }
 }
@@ -122,12 +121,11 @@ std::pair<bool, std::vector<ARGEdge *>> arg_utils::map_genotype_to_ARG_approxima
     return {false, {}};
 }
 
-void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &genotype, int site_id) {
+void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &genotype, const arg_real_t pos) {
     if (arg.roots.empty()) {
         throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
     }
     std::size_t n = arg.leaf_ids.size();
-    arg_real_t pos = arg.get_site_positions()[site_id];
 
     if (genotype.size() != n / 2) {
         throw std::invalid_argument(
@@ -162,7 +160,7 @@ void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &ge
         int leaf_id = homozygotes.peek();
         std::tie(edge, current_carriers) =
                 highest_carrier_edge_diploid(arg, leaf_id, homozygotes, heterozygotes, pos);
-        arg.add_mutation(edge, pos, -1, site_id);
+        arg.add_mutation(edge, pos);
         homozygotes.erase(current_carriers);
 
         DescendantList diploid_carriers(n);
@@ -205,7 +203,7 @@ void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &ge
             diploid_carriers.set(2 * (l / 2) + 1, true);
         }
         heterozygotes.erase(diploid_carriers);
-        arg.add_mutation(edge, pos, -1, site_id);
+        arg.add_mutation(edge, pos);
     }
 }
 

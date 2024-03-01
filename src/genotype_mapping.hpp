@@ -112,11 +112,10 @@ std::tuple<std::vector<ARGEdge*>, double> map_genotype_to_ARG_approximate(
  ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
 /**
- * @brief Finds the highest carrier edge for a given leaf in an ARG, assuming all carriers are homozygous.
+ * @brief Finds the highest edge above leaf `leaf_id` such that all descendants are carriers.
  *
- * This function is a simplified version of finding the highest carrier edge in an ARG, where it assumes
- * that all carriers are homozygous. It delegates the task to the 'highest_carrier_edge_diploid' function
- * by providing an empty list for heterozygous carriers.
+ * This function is a simplified version of finding the highest carrier edge in an ARG. It delegates the task to the
+ * 'highest_carrier_edge_diploid' function by providing an empty list for heterozygous carriers.
  *
  * @param arg Reference to the ARG object.
  * @param leaf_id The identifier of the leaf node from which the search begins.
@@ -163,7 +162,7 @@ std::pair<ARGEdge*, DescendantList> highest_carrier_edge_diploid(
     ARG& arg, int leaf_id, const DescendantList& homozygotes, const DescendantList& heterozygotes, arg_real_t pos);
 
 /**
- * @brief Finds the most recent common ancestor (MRCA) of a set of descendants in an ARG at a specific position.
+ * @brief Finds the most recent common ancestor (MRCA) of a set of leaves in an ARG at a specific position.
  *
  * This function traverses an ancestral recombination graph (ARG) to find the MRCA of given descendants.
  * It works by iteratively moving up the ARG from the descendants, aggregating sibling nodes until all descendants

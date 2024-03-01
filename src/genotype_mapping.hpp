@@ -32,7 +32,7 @@
 namespace arg_utils
 {
 
-struct RelateMutationMapping {
+struct MutationMappingStruct {
   ARGEdge* edge = nullptr;
   double penalty = std::numeric_limits<double>::max();
 };
@@ -40,11 +40,12 @@ struct RelateMutationMapping {
 /**
  * @brief Maps a genotype to an ancestral recombination graph (ARG).
  *
- * This function integrates genotype information into a given ARG by identifying and mapping carriers of mutations.
- * It requires the ARG to be pre-populated with children and roots.
+ * This function parsimoniously integrates phased genotype information into a given ARG by assigning mutations to edges
+ * that only subtend carriers. It requires the ARG to be pre-populated with children and roots.
  *
  * @param arg Reference to the ARG object to be modified.
- * @param genotype A vector containing genotype information.
+ * @param genotype A vector containing genotype information. This must have length equal to the number of leaves in the
+ *                 ARG. The genotype can only take values 0 and 1.
  * @param pos The site position.
  *
  * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called first).
@@ -53,8 +54,8 @@ struct RelateMutationMapping {
  * @note This function does not support mutations carried by all samples (see issue #140).
  *
  * @details The function first checks if the ARG has been properly initialized with roots.
- * It then creates a list of carriers based on the genotype and identifies the position of the mutation.
- * For each carrier, it locates the highest edge in the ARG associated with the mutation and updates the ARG by adding the mutation.
+ * For each carrier, it locates the highest edge in the ARG such that all descendants of that edge carry the mutation.
+ * It then updates the ARG by placing a mutation on that edge.
  */
 void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
@@ -84,35 +85,31 @@ void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, arg_real_t 
 void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
 /**
- * @brief Maps a genotype to an ancestral recombination graph (ARG) approximately based on allele counts and frequencies.
+ * @brief Maps a genotype to an ancestral recombination graph (ARG) approximately based on allele counts.
  *
- * This function aims to approximate the mapping of a genotype to an ARG. It operates differently based on allele counts
+ * This function maps a phased genotype to one or more edges in the ARG based on a heuristic from Speidel et al. (2019).
+ * It does not add mutations to the ARG but returns pointers to edges where mutations would be placed under the
+ * heuristic. This function assumes the minor allele is ancestral. It operates differently based on allele counts
  * and minor allele frequencies (MAFs), returning a pair of a boolean (indicating if alleles are flipped) and a vector of
  * ARGEdge pointers that the genotype maps to.
  *
  * @param arg Reference to the ARG object.
  * @param genotype A vector of integers representing the genotype.
  * @param pos The genomic position of interest.
- * @param maf_threshold The threshold for minor allele frequency.
  *
- * @return A pair consisting of:
- *   - A boolean indicating whether the alleles are flipped (true if flipped, false otherwise).
- *   - A vector of pointers to ARGEdges that the genotype maps to.
+ * @return A tuple containing:
+ *   A vector of pointers to ARGEdges that the genotype maps to.
+ *   A double representing the mapping penalty
  *
  * @details The function operates as follows:
  *   - For allele counts ≤ 4, maps up to 4 edges parsimoniously.
  *   - For allele counts ≥ n - 4, considers the complement of carriers (flipped case) and maps accordingly.
- *   - For allele frequencies within the MAF threshold, employs a different mapping strategy focusing on the best edge
- *     and traversing until the MRCA of all carriers is reached.
  *   - The function returns an empty vector if no successful mapping is found.
- *
- * The approach varies based on whether the allele count is small (indicating rare mutations) or large, as well as
- * whether the allele frequency falls within a specified MAF threshold.
  *
  * @throws std::runtime_error if the genotype is monomorphic (all alleles are the same), as it cannot map such mutations.
  */
-std::pair<bool, std::vector<ARGEdge*>> map_genotype_to_ARG_approximate(
-    ARG& arg, const std::vector<int>& genotype, arg_real_t pos, double maf_threshold);
+std::tuple<std::vector<ARGEdge*>, double> map_genotype_to_ARG_approximate(
+ ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
 /**
  * @brief Finds the highest carrier edge for a given leaf in an ARG, assuming all carriers are homozygous.
@@ -203,7 +200,7 @@ ARGNode* most_recent_common_ancestor(const ARG& arg, const DescendantList& desce
  * @param node A pointer to the ARGNode being processed.
  * @param obs_carriers A DescendantList of observed carriers of the genetic variant.
  * @param pos The genomic position at which the evaluation is performed.
- * @param mutmap A reference to a RelateMutationMapping structure that is updated based on the node's evaluation.
+ * @param mutmap A reference to a MutationMappingStruct that is updated based on the node's evaluation.
  *
  * @return A DescendantList representing the descendants of the current node.
  *
@@ -218,8 +215,8 @@ ARGNode* most_recent_common_ancestor(const ARG& arg, const DescendantList& desce
  * @throws std::runtime_error if the sum of intersecting and non-intersecting groups does not equal the total number of
  * individuals, indicating an error in partitioning.
  */
-DescendantList populate_relate_scores_lazy(
-    const ARG& arg, const ARGNode* node, DescendantList& obs_carriers, arg_real_t pos, RelateMutationMapping& mutmap);
+DescendantList populate_mutation_mapping_scores(
+    const ARG& arg, const ARGNode* node, DescendantList& obs_carriers, arg_real_t pos, MutationMappingStruct& mutmap);
 
 } // namespace arg_utils
 

@@ -48,77 +48,67 @@ void arg_utils::map_genotype_to_ARG(ARG &arg, const std::vector<int> &genotype, 
     }
 }
 
+std::tuple<std::vector<ARGEdge*>, double> arg_utils::map_genotype_to_ARG_approximate(
+    ARG& arg, const std::vector<int>& genotype, arg_real_t pos)
+{
+  const int allele_count = std::reduce(genotype.begin(), genotype.end());
+  const std::size_t n = arg.leaf_ids.size();
 
-std::pair<bool, std::vector<ARGEdge *>> arg_utils::map_genotype_to_ARG_approximate(
-        ARG &arg, const std::vector<int> &genotype, arg_real_t pos, double maf_threshold) {
-    int allele_count = std::reduce(genotype.begin(), genotype.end());
-    const std::size_t n = arg.leaf_ids.size();
-    const double allele_frequency = static_cast<double>(allele_count) / static_cast<double>(n);
-
-    // NB this does not consider flipped ultra rare variants (do those exist? probably, but not common)
-    if (allele_count <= 4) {
-        DescendantList carriers(n, genotype);
-        if (carriers.num_values() == 0) {
-            throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
-        }
-        std::vector<ARGEdge *> mapped_edges;
-
-        ARGEdge *edge;
-        DescendantList current_carriers(n);
-        while (carriers.num_values() > 0) {
-            // Start with a random carrier
-            int leaf_id = carriers.peek();
-            std::tie(edge, current_carriers) = arg_utils::highest_carrier_edge(arg, leaf_id, carriers, pos);
-            mapped_edges.push_back(edge);
-            carriers.erase(current_carriers);
-        }
-        // return non-flipped state and the mapped edges
-        return {false, mapped_edges};
+  if (allele_count <= 4) {
+    DescendantList carriers(n, genotype);
+    if (carriers.num_values() == 0) {
+      throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
     }
-    if (allele_count >= n - 4) {
-        // parsimoniously map complement
-        DescendantList carriers(n, genotype);
-        carriers = carriers.complement();
-        if (carriers.num_values() == 0) {
-            throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
-        }
-        std::vector<ARGEdge *> mapped_edges;
+    std::vector<ARGEdge*> mapped_edges;
 
-        ARGEdge *edge;
-        DescendantList current_carriers(n);
-        while (carriers.num_values() > 0) {
-            // Start with a random carrier
-            int leaf_id = carriers.peek();
-            std::tie(edge, current_carriers) = arg_utils::highest_carrier_edge(arg, leaf_id, carriers, pos);
-            mapped_edges.push_back(edge);
-            carriers.erase(current_carriers);
-        }
-        // return flipped state and the mapped edges
-        return {true, mapped_edges};
+    ARGEdge* edge;
+    DescendantList current_carriers(n);
+    while (carriers.num_values() > 0) {
+      // Start with a random carrier
+      const int leaf_id = carriers.peek();
+      std::tie(edge, current_carriers) = highest_carrier_edge(arg, leaf_id, carriers, pos);
+      mapped_edges.push_back(edge);
+      carriers.erase(current_carriers);
     }
-    if (allele_frequency <= maf_threshold || allele_frequency >= 1 - maf_threshold) {
-        // algorithm goes like this:
-        // start with a random carrier,
-        // traverse the tree upwards and at each new internal node do "populate_relate_scores" downwards
-        // and find the best edge only keep track of a single, best branch continue until we reach the
-        // mrca of all carriers
-        bool flipped = allele_frequency >= 1.0 - maf_threshold;
-        DescendantList carriers(n, genotype);
-        if (flipped) {
-            carriers = carriers.complement();
-        }
-        if (carriers.num_values() == 0) {
-            throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
-        }
-        ARGNode *mrca = arg_utils::most_recent_common_ancestor(arg, carriers, pos);
+    return std::make_tuple(mapped_edges, 0.0);
+  }
+  if (allele_count >= n - 4) {
+    // parsimoniously map complement
+    DescendantList carriers(n, genotype);
+    carriers = carriers.complement();
+    if (carriers.num_values() == 0) {
+      throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
+    }
+    std::vector<ARGEdge*> mapped_edges;
 
-        arg_utils::RelateMutationMapping mutmap{};
-        populate_relate_scores_lazy(arg, mrca, carriers, pos, mutmap);
-        return mutmap.edge == nullptr
-               ? std::pair<bool, std::vector<ARGEdge *>>(flipped, {})
-               : std::pair<bool, std::vector<ARGEdge *>>(flipped, {mutmap.edge});
+    ARGEdge* edge;
+    DescendantList current_carriers(n);
+    while (carriers.num_values() > 0) {
+      // Start with a random carrier
+      int leaf_id = carriers.peek();
+      std::tie(edge, current_carriers) = highest_carrier_edge(arg, leaf_id, carriers, pos);
+      mapped_edges.push_back(edge);
+      carriers.erase(current_carriers);
     }
-    return {false, {}};
+    return std::make_tuple(mapped_edges, 0.0);
+  }
+
+  // algorithm goes like this:
+  // start with a random carrier,
+  // traverse the tree upwards and at each new internal node do "populate_mutation_mapping_scores" downwards
+  // and find the best edge only keep track of a single, best branch continue until we reach the
+  // mrca of all carriers
+  DescendantList carriers(n, genotype);
+  if (carriers.num_values() == 0) {
+    throw std::runtime_error(THROW_LINE("Can't date monomorphic mutations"));
+  }
+  ARGNode* mrca = most_recent_common_ancestor(arg, carriers, pos);
+
+  MutationMappingStruct mutmap{};
+  populate_mutation_mapping_scores(arg, mrca, carriers, pos, mutmap);
+
+  return mutmap.edge == nullptr ? std::tuple(std::vector<ARGEdge*>{}, mutmap.penalty)
+                                : std::tuple(std::vector<ARGEdge*>{mutmap.edge}, mutmap.penalty);
 }
 
 void arg_utils::map_genotype_to_ARG_diploid(ARG &arg, const std::vector<int> &genotype, const arg_real_t pos) {
@@ -249,7 +239,7 @@ std::pair<ARGEdge *, DescendantList> arg_utils::highest_carrier_edge(
         ARG &arg, const int leaf_id, const DescendantList &carriers, const arg_real_t pos) {
     // Just call the diploid function with an empty het-list
     const DescendantList het(arg.leaf_ids.size());
-    return arg_utils::highest_carrier_edge_diploid(arg, leaf_id, carriers, het, pos);
+    return highest_carrier_edge_diploid(arg, leaf_id, carriers, het, pos);
 }
 
 std::pair<ARGEdge *, DescendantList> arg_utils::highest_carrier_edge_diploid(
@@ -307,10 +297,9 @@ std::pair<ARGEdge *, DescendantList> arg_utils::highest_carrier_edge_diploid(
     return {edge, current_carriers};
 }
 
-
-DescendantList arg_utils::populate_relate_scores_lazy(const ARG &arg, const ARGNode *node,
-                                                      DescendantList &obs_carriers, const arg_real_t pos,
-                                                      arg_utils::RelateMutationMapping &mutmap) {
+DescendantList arg_utils::populate_mutation_mapping_scores(const ARG& arg, const ARGNode* node,
+    DescendantList& obs_carriers, const arg_real_t pos, MutationMappingStruct& mutmap)
+{
 
     const std::size_t n = arg.leaf_ids.size();
     const int current_node_id = node->ID;
@@ -321,7 +310,7 @@ DescendantList arg_utils::populate_relate_scores_lazy(const ARG &arg, const ARGN
     if (arg.leaf_ids.find(current_node_id) == arg.leaf_ids.end()) {
         for (const ARGEdge *child_edge: node->children_at(pos)) {
             child_descendants =
-                    arg_utils::populate_relate_scores_lazy(arg, child_edge->child, obs_carriers, pos, mutmap);
+                    arg_utils::populate_mutation_mapping_scores(arg, child_edge->child, obs_carriers, pos, mutmap);
             descendants.add(child_descendants);
         }
     } else {

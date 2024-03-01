@@ -469,14 +469,14 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
     m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"),
           py::arg("genotype"), py::arg("site_id"), "Maps a diploid genotype to an ARG");
     m.def("map_genotype_to_ARG_approximate",
-          [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos, double maf_threshold) {
-              auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos, maf_threshold);
+          [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos) {
+              auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos);
               std::vector<ARGEdge> edges;
-              for (auto edge: result.second) {
+              for (const auto edge: std::get<0>(result)) {
                   edges.push_back(*edge);
               }
-              return py::make_tuple(result.first, edges);
-          }, py::arg("arg"), py::arg("genotype"), py::arg("pos"), py::arg("maf_threshold"),
+              return py::make_tuple(edges, std::get<1>(result));
+          }, py::arg("arg"), py::arg("genotype"), py::arg("pos"),
           "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
     m.def("most_recent_common_ancestor",
           [](ARG &arg, std::vector<int> descendants, double position) {

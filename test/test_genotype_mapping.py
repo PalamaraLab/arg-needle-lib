@@ -181,20 +181,16 @@ def test_map_genotypes_approximate():
     # import pdb
     # pdb.set_trace()
     genotype1 = [1, 0, 1, 0, 1, 0, 0, 1, 1, 0]
-    flipped1, map1 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype1, positions[0], 0.4)
-    assert not flipped1
+    map1, _ = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype1, positions[0])
     assert len(map1) == 0
     genotype2 = [1, 0, 1, 1, 1, 0, 0, 1, 1, 0]
-    flipped2, map2 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype2, positions[1], 0.4)
-    assert flipped2
+    map2, _ = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype2, positions[1])
     assert map2[0].child.ID == 15
     genotype3 = [1, 0, 0, 0, 1, 0, 0, 1, 1, 0]
-    flipped3, map3 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype3, positions[2], 0.4)
-    assert not flipped3
+    map3, _ = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype3, positions[2])
     assert map3[0].child.ID == 13
     genotype4 = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
-    flipped4, map4 = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype4, positions[3], 0.4)
-    assert not flipped4
+    map4, _ = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype4, positions[3])
     assert len(map4) == 2
 
 

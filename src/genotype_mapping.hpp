@@ -48,7 +48,8 @@ struct MutationMappingStruct {
  *                 ARG. The genotype can only take values 0 and 1.
  * @param pos The site position.
  *
- * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called first).
+ * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called
+ * first).
  * @throws std::invalid_argument if the mutation is carried by all samples, as this is currently unsupported.
  *
  * @note This function does not support mutations carried by all samples (see issue #140).
@@ -62,25 +63,28 @@ void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, arg_real_t 
 /**
  * @brief Maps a diploid genotype to an ancestral recombination graph (ARG).
  *
- * This function integrates diploid genotype information into a given ARG. It processes both homozygous and heterozygous genotypes
- * by identifying and mapping carriers of mutations. The function requires the ARG to be pre-populated with children and roots.
+ * This function integrates diploid genotype information into a given ARG. It processes both homozygous and heterozygous
+ * genotypes by identifying and mapping carriers of mutations. The function requires the ARG to be pre-populated with
+ * children and roots.
  *
  * @param arg Reference to the ARG object to be modified.
  * @param genotype A vector containing diploid genotype information, with values 0, 1, or 2.
  * @param pos The site position.
  *
- * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called first).
+ * @throws std::runtime_error if the ARG roots are empty (indicating `populate_children_and_roots()` must be called
+ * first).
  * @throws std::invalid_argument if the size of the genotype vector is not exactly half the number of ARG leaves.
  * @throws std::invalid_argument if mutations are carried by all samples, as this is currently unsupported.
  * @throws std::runtime_error if genotype values are not 0, 1, or 2.
  *
- * @note This function does not support mutations carried by all samples (see issue #140). Genotype values must be 0 (non-carrier),
- * 1 (heterozygous carrier), or 2 (homozygous carrier).
+ * @note This function does not support mutations carried by all samples (see issue #140). Genotype values must be 0
+ * (non-carrier), 1 (heterozygous carrier), or 2 (homozygous carrier).
  *
- * @details The function first checks if the ARG has been properly initialized with roots. It then processes the diploid genotype
- * to identify homozygous and heterozygous carriers. For each homozygous carrier, it locates the highest edge in the ARG associated
- * with the mutation and updates the ARG by adding the mutation. The function then processes heterozygous carriers, determining
- * the appropriate edge for mutation placement by comparing the number of carriers or the height difference between parent and child nodes.
+ * @details The function first checks if the ARG has been properly initialized with roots. It then processes the diploid
+ * genotype to identify homozygous and heterozygous carriers. For each homozygous carrier, it locates the highest edge
+ * in the ARG associated with the mutation and updates the ARG by adding the mutation. The function then processes
+ * heterozygous carriers, determining the appropriate edge for mutation placement by comparing the number of carriers or
+ * the height difference between parent and child nodes.
  */
 void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
@@ -90,8 +94,8 @@ void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, arg
  * This function maps a phased genotype to one or more edges in the ARG based on a heuristic from Speidel et al. (2019).
  * It does not add mutations to the ARG but returns pointers to edges where mutations would be placed under the
  * heuristic. This function assumes the minor allele is ancestral. It operates differently based on allele counts
- * and minor allele frequencies (MAFs), returning a pair of a boolean (indicating if alleles are flipped) and a vector of
- * ARGEdge pointers that the genotype maps to.
+ * and minor allele frequencies (MAFs), returning a pair of a boolean (indicating if alleles are flipped) and a vector
+ * of ARGEdge pointers that the genotype maps to.
  *
  * @param arg Reference to the ARG object.
  * @param genotype A vector of integers representing the genotype.
@@ -106,10 +110,11 @@ void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, arg
  *   - For allele counts ≥ n - 4, considers the complement of carriers (flipped case) and maps accordingly.
  *   - The function returns an empty vector if no successful mapping is found.
  *
- * @throws std::runtime_error if the genotype is monomorphic (all alleles are the same), as it cannot map such mutations.
+ * @throws std::runtime_error if the genotype is monomorphic (all alleles are the same), as it cannot map such
+ * mutations.
  */
 std::tuple<std::vector<ARGEdge*>, double> map_genotype_to_ARG_approximate(
- ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
+    ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
 /**
  * @brief Finds the highest edge above leaf `leaf_id` such that all descendants are carriers.
@@ -148,7 +153,8 @@ std::pair<ARGEdge*, DescendantList> highest_carrier_edge(
  * @param heterozygotes A DescendantList object representing the heterozygous carriers.
  * @param pos The position in the genome associated with the mutation.
  *
- * @throws std::runtime_error if no siblings are found for a given node, which might indicate the presence of unary nodes.
+ * @throws std::runtime_error if no siblings are found for a given node, which might indicate the presence of unary
+ * nodes.
  *
  * @return A pair consisting of a pointer to the ARGEdge representing the highest carrier edge,
  * and a DescendantList of the current carriers found up to that edge.
@@ -175,7 +181,8 @@ std::pair<ARGEdge*, DescendantList> highest_carrier_edge_diploid(
  * @return A pointer to the ARGNode that represents the MRCA at the specified position. Returns nullptr if the
  * list of descendants is empty.
  *
- * @throws std::runtime_error if the ARG roots are empty, indicating that `populate_children_and_roots()` must be called first.
+ * @throws std::runtime_error if the ARG roots are empty, indicating that `populate_children_and_roots()` must be called
+ * first.
  *
  * @details The function first checks if the ARG's roots are populated. If not, an exception is thrown.
  * If the descendants list is empty, it returns nullptr. If the descendants include all leaves in the ARG,

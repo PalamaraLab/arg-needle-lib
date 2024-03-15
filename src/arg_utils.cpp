@@ -31,6 +31,7 @@ from the root of this repository.
 #include "arg.hpp"
 #include "arg_edge.hpp"
 #include "arg_node.hpp"
+#include "constants.hpp"
 #include "descendant_list.hpp"
 #include "deserialization_params.hpp"
 #include "file_utils.hpp"
@@ -42,6 +43,7 @@ from the root of this repository.
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <future>
 #include <functional>
 #include <iostream>
 #include <list>
@@ -50,6 +52,7 @@ from the root of this repository.
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <typeinfo>
 #include <unordered_map>
@@ -76,6 +79,38 @@ using Clock = std::chrono::high_resolution_clock;
 using boost::dynamic_bitset;
 
 namespace arg_utils {
+
+unsigned validate_parallel_tasks(const unsigned num_tasks) {
+    unsigned recommended_max = anl::get_default_concurrency();
+
+    if (num_tasks == 0u) {
+        std::cerr << "Warning: can't set num_tasks to 0: setting to 1\n";
+        return 1u;
+    }
+
+    if (num_tasks > recommended_max) {
+        std::cerr << "Warning: recommended max num_tasks is " << recommended_max
+                  << ": you are using requesting " << num_tasks << '\n';
+    }
+
+    return num_tasks;
+}
+
+arg_real_t local_volume_single(const ARG &arg, arg_real_t min_pos, arg_real_t max_pos) {
+    arg_real_t volume = 0;
+    arg_utils::visit_branches(
+            arg,
+            [&volume](const DescendantList &desc_list, const DescendantList &_ignored,
+                      const ARGNode *parent, const ARGNode *child, arg_real_t start, arg_real_t end) {
+                (void) desc_list;
+                (void) _ignored;
+                arg_real_t branch_volume = (parent->height - child->height) * (end - start);
+                volume += branch_volume;
+            },
+            min_pos, max_pos);
+    return volume;
+}
+
 
 // Compute the number of lineages at a position at a certain height
 //
@@ -402,23 +437,32 @@ arg_real_t total_volume(const ARG& arg) {
   return volume;
 }
 
-// computes the local volume of an ARG between min and max position
-// NOTE: if the max_position - min_position is really large then
-// this may result in a drop in performance relative to total_volume.
-// The intended use case for this function is for testing the visit_branches function
-arg_real_t local_volume(const ARG& arg, arg_real_t min_position, arg_real_t max_position) {
-  arg_real_t volume = 0;
-  arg_utils::visit_branches(
-      arg,
-      [&volume](const DescendantList& desc_list, const DescendantList& _ignored,
-                const ARGNode* parent, const ARGNode* child, arg_real_t start, arg_real_t end) {
-        (void) desc_list;
-        (void) _ignored;
-        arg_real_t branch_volume = (parent->height - child->height) * (end - start);
-        volume += branch_volume;
-      },
-      min_position, max_position);
-  return volume;
+arg_real_t local_volume(const ARG &arg, std::optional<arg_real_t> min_pos, std::optional<arg_real_t> max_pos,
+                        std::optional<unsigned> num_tasks) {
+
+    const unsigned valid_num_tasks = validate_parallel_tasks(num_tasks.value_or(anl::get_default_concurrency()));
+    const arg_real_t valid_min_pos = min_pos.value_or(arg.start);
+    const arg_real_t valid_max_pos = max_pos.value_or(arg.end);
+
+    if (valid_num_tasks == 1u) {
+        return local_volume_single(arg, valid_min_pos, valid_max_pos);
+    }
+
+    std::vector<std::future<arg_real_t>> results;
+    const arg_real_t step_size = (valid_max_pos - valid_min_pos) / valid_num_tasks;
+
+    for (unsigned i = 0; i < valid_num_tasks; ++i) {
+        const arg_real_t lo = valid_min_pos + i * step_size;
+        const arg_real_t hi = valid_min_pos + (i + 1u) * step_size;
+        results.push_back(std::async(std::launch::async, local_volume_single, std::cref(arg), lo, hi));
+    }
+
+    arg_real_t res = 0.0;
+    for (auto &fut: results) {
+        res += fut.get();
+    }
+
+    return res;
 }
 
 // result[i] is the total volume of branches that have i descendants

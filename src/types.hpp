@@ -20,6 +20,10 @@
 #ifndef ARG_NEEDLE_LIB_TYPES_H
 #define ARG_NEEDLE_LIB_TYPES_H
 
+#include <Eigen/Dense>
+
 using arg_real_t = double;
+
+using MatXui = Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic>;
 
 #endif // ARG_NEEDLE_LIB_TYPES_H

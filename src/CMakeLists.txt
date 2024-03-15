@@ -21,6 +21,9 @@ find_package(Boost COMPONENTS iostreams REQUIRED)
 # Find Eigen
 find_package(Eigen3 CONFIG REQUIRED)
 
+# Find the appropriate system threads library
+find_package(Threads REQUIRED)
+
 set(
         arg_needle_lib_src
         ancestor_entry.cpp
@@ -28,6 +31,7 @@ set(
         arg_edge.cpp
         arg_node.cpp
         arg_utils.cpp
+        constants.cpp
         descendant_list.cpp
         file_utils.cpp
         genotype_mapping.cpp
@@ -45,6 +49,7 @@ set(
         arg_edge.hpp
         arg_node.hpp
         arg_utils.hpp
+        constants.hpp
         descendant_list.hpp
         deserialization_params.hpp
         file_utils.hpp
@@ -69,7 +74,7 @@ target_include_directories(
 set_target_properties(arg_needle_lib PROPERTIES PUBLIC_HEADER "${arg_needle_lib_hdr}")
 
 
-target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams)
+target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams Threads::Threads)
 target_link_libraries(arg_needle_lib PUBLIC Eigen3::Eigen)
 
 # Turning off warnings for now

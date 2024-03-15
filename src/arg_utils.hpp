@@ -37,8 +37,6 @@
 #include <tuple>
 #include <unordered_map>
 
-#include <Eigen/Dense>
-using MatXui = Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic>;
 
 namespace arg_utils {
 

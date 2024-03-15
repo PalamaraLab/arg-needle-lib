@@ -73,6 +73,57 @@ def test_map_genotypes_small():
         arg_needle_lib.map_genotype_to_ARG(arg, [1, 1, 1, 1], 4)
 
 
+def test_map_genotypes_small_async():
+    """Test that input genotypes are correctly converted to mutations on edges"""
+    seed = 130222
+    ts = msprime.simulate(sample_size=4, random_seed=seed)
+    # Generates the following tree
+    # 1.23┊    6    ┊
+    #     ┊  ┏━┻━┓  ┊
+    # 0.85┊  ┃   5  ┊
+    #     ┊  ┃  ┏┻┓ ┊
+    # 0.17┊  4  ┃ ┃ ┊
+    #     ┊ ┏┻┓ ┃ ┃ ┊
+    # 0.00┊ 0 2 1 3 ┊
+    #     0         1
+    arg = arg_needle_lib.tskit_to_arg(ts)
+    positions = [.1, .2, .3, .4]
+    genotypes = [
+        [0, 1, 1, 0],
+        [1, 0, 1, 0],
+        [1, 1, 0, 1],
+        [0, 0, 0, 0]]
+
+    # Check we halt if no children
+    with pytest.raises(RuntimeError):
+        arg_needle_lib.map_genotype_to_ARG(arg, [0, 1, 1, 0], 0)
+
+    arg.populate_children_and_roots()
+
+    # Check mutations are correctly inserted
+    arg_needle_lib.map_genotypes_to_ARG(arg, genotypes, positions)
+
+    me_0 = [m.edge for m in arg.mutations() if m.position == .1]
+    expected_nodes_0 = {(2, 4), (1, 5)}
+    assert set([(m.child.ID, m.parent.ID) for m in me_0]) == expected_nodes_0
+
+    me_1 = [m.edge for m in arg.mutations() if m.position == .2]
+    expected_nodes_1 = {(4, 6)}
+    assert set([(m.child.ID, m.parent.ID) for m in me_1]) == expected_nodes_1
+
+    me_2 = [m.edge for m in arg.mutations() if m.position == .3]
+    expected_nodes_2 = {(0, 4), (5, 6)}
+    assert set([(m.child.ID, m.parent.ID) for m in me_2]) == expected_nodes_2
+
+    me_3 = [m.edge for m in arg.mutations() if m.position == .4]
+    assert len(me_3) == 0
+
+    # Check we halt on mutation carried by all which would segfault otherwise
+    # See issue #140
+    with pytest.raises(ValueError):
+        arg_needle_lib.map_genotype_to_ARG(arg, [1, 1, 1, 1], 4)
+
+
 def test_map_genotypes_big():
     """Test that input genotypes are correctly converted to mutations on edges"""
     seed = 130222

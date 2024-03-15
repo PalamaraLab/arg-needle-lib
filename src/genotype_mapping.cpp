@@ -20,16 +20,20 @@
 #include "genotype_mapping.hpp"
 
 #include "arg_utils.hpp"
+#include "constants.hpp"
 #include "descendant_list.hpp"
 #include "utils.hpp"
 
-void arg_utils::map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, const arg_real_t pos)
-{
-  if (arg.roots.empty()) {
-    throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
-  }
+#include <future>
 
+namespace
+{
+std::vector<std::tuple<ARGEdge*, arg_real_t>> map_genotype_to_ARG_internal(
+    const ARG& arg, const std::vector<int>& genotype, const arg_real_t pos)
+{
   const std::size_t num_leaves = arg.leaf_ids.size();
+
+  std::vector<std::tuple<ARGEdge*, arg_real_t>> mutations_to_add{};
 
   // Jot down all the carriers of the mutation
   DescendantList carriers(num_leaves, genotype);
@@ -42,14 +46,96 @@ void arg_utils::map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, 
   DescendantList current_carriers(num_leaves);
   while (carriers.num_values() > 0) {
     const int leaf_id = carriers.peek();
-    std::tie(edge, current_carriers) = highest_carrier_edge(arg, leaf_id, carriers, pos);
-    arg.add_mutation(edge, pos);
+    std::tie(edge, current_carriers) = arg_utils::highest_carrier_edge(arg, leaf_id, carriers, pos);
+    mutations_to_add.emplace_back(edge, pos);
     carriers.erase(current_carriers);
+  }
+
+  return mutations_to_add;
+}
+} // namespace
+
+void arg_utils::map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, const arg_real_t pos)
+{
+  if (arg.roots.empty()) {
+    throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
+  }
+
+  const std::vector<std::tuple<ARGEdge*, arg_real_t>> mutations_to_add = map_genotype_to_ARG_internal(arg, genotype, pos);
+
+  for (auto& [edge, pos] : mutations_to_add) {
+    arg.add_mutation(edge, pos);
+  }
+}
+
+void arg_utils::map_genotypes_to_ARG(
+    ARG& arg, const MatXui& genotypes, const std::vector<arg_real_t>& positions, std::optional<unsigned> num_tasks)
+{
+  if (arg.roots.empty()) {
+    throw std::runtime_error(THROW_LINE("Call populate_children_and_roots() first."));
+  }
+
+  if (genotypes.rows() != positions.size()) {
+    std::cerr << "Error: The number of genotypes does not match the number of positions." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  unsigned valid_num_tasks = num_tasks.value_or(anl::get_default_concurrency());
+  if (valid_num_tasks > genotypes.rows()) {
+    valid_num_tasks = genotypes.rows();
+  }
+
+  const unsigned num_rows_per_task = (genotypes.rows() + valid_num_tasks - 1) / valid_num_tasks;
+
+  std::vector<std::future<std::vector<std::tuple<ARGEdge*, arg_real_t>>>> futures;
+
+  // Launch asynchronous tasks
+  for (int i = 0; i < valid_num_tasks; ++i) {
+
+    const unsigned row_start = i * num_rows_per_task;
+    const unsigned row_end = row_start + num_rows_per_task;
+
+    futures.push_back(std::async(std::launch::async, [&arg, &genotypes, &positions, row_start, row_end]() {
+      std::vector<std::tuple<ARGEdge*, arg_real_t>> mutations_this_block{};
+
+      for (unsigned j = row_start; j < row_end; ++j) {
+
+        if (j >= genotypes.rows()) {
+          break;
+        }
+
+        std::vector<int> genotype_vec;
+        genotype_vec.reserve(genotypes.cols());
+        for (int k = 0; k < genotypes.cols(); ++k) {
+          genotype_vec.push_back(static_cast<int>(genotypes(j, k)));
+        }
+
+        const arg_real_t pos = positions[j];
+        auto mutations_this_row = map_genotype_to_ARG_internal(arg, genotype_vec, pos);
+
+        for (const auto mut : mutations_this_row) {
+          mutations_this_block.push_back(mut);
+        }
+      }
+
+      return mutations_this_block;
+    }));
+  }
+
+  std::vector<std::vector<std::tuple<ARGEdge*, arg_real_t>>> all_results;
+  for (auto& future : futures) {
+    all_results.push_back(future.get()); // This waits for each task to complete and collects the results
+  }
+
+  for (const auto& result : all_results) {
+    for (const auto& [edge, pos] : result) {
+      arg.add_mutation(edge, pos);
+    }
   }
 }
 
 std::tuple<std::vector<ARGEdge*>, double> arg_utils::map_genotype_to_ARG_approximate(
-    ARG& arg, const std::vector<int>& genotype, arg_real_t pos)
+    const ARG& arg, const std::vector<int>& genotype, arg_real_t pos)
 {
   const int allele_count = std::reduce(genotype.begin(), genotype.end());
   const std::size_t n = arg.leaf_ids.size();
@@ -232,21 +318,29 @@ ARGNode* arg_utils::most_recent_common_ancestor(
 }
 
 std::pair<ARGEdge*, DescendantList> arg_utils::highest_carrier_edge(
-    ARG& arg, const int leaf_id, const DescendantList& carriers, const arg_real_t pos)
+    const ARG& arg, const int leaf_id, const DescendantList& carriers, const arg_real_t pos)
 {
   // Just call the diploid function with an empty het-list
   const DescendantList het(arg.leaf_ids.size());
   return highest_carrier_edge_diploid(arg, leaf_id, carriers, het, pos);
 }
 
-std::pair<ARGEdge*, DescendantList> arg_utils::highest_carrier_edge_diploid(ARG& arg, const int leaf_id,
+std::pair<ARGEdge*, DescendantList> arg_utils::highest_carrier_edge_diploid(const ARG& arg, const int leaf_id,
     const DescendantList& homozygotes, const DescendantList& heterozygotes, const arg_real_t pos)
 {
   const int n = arg.leaf_ids.size();
-  // arg_real_t pos = arg.get_sites()[site_id];
   DescendantList current_carriers(n, leaf_id);
-  const ARGNode* node = arg.arg_nodes[leaf_id].get();
-  const ARGNode* parent = arg.arg_nodes[leaf_id].get();
+
+  const ARGNode* node = nullptr;
+  const ARGNode* parent = nullptr;
+  try {
+    node = arg.arg_nodes.at(leaf_id).get();
+    parent = node;
+  } catch (const std::out_of_range& e) {
+    std::cerr << "Error: Node with ID " << leaf_id << " not found." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   ARGEdge* edge = node->parent_edge_at(pos);
   DescendantList leaves(n, leaf_id);
   DescendantList sib_leaves(n);

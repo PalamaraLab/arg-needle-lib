@@ -26,6 +26,7 @@
 #include "types.hpp"
 
 #include <limits>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -59,6 +60,9 @@ struct MutationMappingStruct {
  * It then updates the ARG by placing a mutation on that edge.
  */
 void map_genotype_to_ARG(ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
+
+void map_genotypes_to_ARG(ARG& arg, const MatXui& genotypes, const std::vector<arg_real_t>& positions,
+    std::optional<unsigned> num_tasks = std::nullopt);
 
 /**
  * @brief Maps a diploid genotype to an ancestral recombination graph (ARG).
@@ -114,7 +118,7 @@ void map_genotype_to_ARG_diploid(ARG& arg, const std::vector<int>& genotype, arg
  * mutations.
  */
 std::tuple<std::vector<ARGEdge*>, double> map_genotype_to_ARG_approximate(
-    ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
+    const ARG& arg, const std::vector<int>& genotype, arg_real_t pos);
 
 /**
  * @brief Finds the highest edge above leaf `leaf_id` such that all descendants are carriers.
@@ -135,7 +139,7 @@ std::tuple<std::vector<ARGEdge*>, double> map_genotype_to_ARG_approximate(
  * between homozygous and heterozygous carriers is not necessary or the carriers are known to be homozygous.
  */
 std::pair<ARGEdge*, DescendantList> highest_carrier_edge(
-    ARG& arg, int leaf_id, const DescendantList& carriers, arg_real_t pos);
+    const ARG& arg, int leaf_id, const DescendantList& carriers, arg_real_t pos);
 
 /**
  * @brief Finds the highest carrier edge for a given leaf in a diploid ARG.
@@ -165,7 +169,7 @@ std::pair<ARGEdge*, DescendantList> highest_carrier_edge(
  * The traversal stops when all carriers are found or when specific conditions are met (e.g., double-heterozygotes).
  */
 std::pair<ARGEdge*, DescendantList> highest_carrier_edge_diploid(
-    ARG& arg, int leaf_id, const DescendantList& homozygotes, const DescendantList& heterozygotes, arg_real_t pos);
+    const ARG& arg, int leaf_id, const DescendantList& homozygotes, const DescendantList& heterozygotes, arg_real_t pos);
 
 /**
  * @brief Finds the most recent common ancestor (MRCA) of a set of leaves in an ARG at a specific position.

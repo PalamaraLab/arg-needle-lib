@@ -465,7 +465,9 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
 
     // Functions for genotype mapping
     m.def("map_genotype_to_ARG", &arg_utils::map_genotype_to_ARG, py::arg("arg"),
-          py::arg("genotype"), py::arg("site_id"), "Maps a genotype to an ARG");
+          py::arg("genotype"), py::arg("pos"), "Maps a genotype to an ARG");
+    m.def("map_genotypes_to_ARG", &arg_utils::map_genotypes_to_ARG, py::arg("arg"),
+          py::arg("genotypes"), py::arg("positions"), py::arg("num_tasks") = std::nullopt, "Maps many genotype to an ARG");
     m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"),
           py::arg("genotype"), py::arg("site_id"), "Maps a diploid genotype to an ARG");
     m.def("map_genotype_to_ARG_approximate",

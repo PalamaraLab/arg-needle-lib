@@ -29,6 +29,7 @@ set(
         test_src
         test_arg.cpp
         test_arg_utils.cpp
+        test_serialize_arg.cpp
         test_simple.cpp
         test_structure.cpp
         test_threading.cpp

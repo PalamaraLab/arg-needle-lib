@@ -25,6 +25,7 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # Find HDF5
+set(HDF5_FIND_DEBUG TRUE)
 find_package(HDF5 COMPONENTS C REQUIRED)
 
 set(

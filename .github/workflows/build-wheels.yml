@@ -65,7 +65,7 @@ jobs:
 
   upload_all:
     name: Upload to PyPI
-    needs: [build_wheels_cloud, build_wheels_self_hosted]
+    needs: build_wheels_cloud
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release' && github.event.action == 'published' && github.repository == 'PalamaraLab/arg-needle-lib' }}
 

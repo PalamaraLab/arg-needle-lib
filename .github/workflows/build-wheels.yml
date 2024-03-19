@@ -30,11 +30,11 @@ jobs:
             py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
             before-all: brew install cmake boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          - os: macos-14
-            arch: arm64
-            py-vers: cp39-* cp310-* cp311-* cp312-*
-            before-all: brew install cmake boost eigen hdf5
-            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+#          - os: macos-14
+#            arch: arm64
+#            py-vers: cp39-* cp310-* cp311-* cp312-*
+#            before-all: brew install cmake boost eigen hdf5
+#            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
 
     env:
       CIBW_BUILD: ${{ matrix.py-vers }}
@@ -63,9 +63,45 @@ jobs:
           path: ./wheelhouse/*.whl
           retention-days: 1
 
+  build_wheels_self_hosted:
+    name: Build wheels on self-hosted-macos-arm64-hemlock
+    runs-on: self-hosted-macos-arm64-hemlock
+    if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+
+    env:
+      CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
+      CIBW_ARCHS_MACOS: arm64
+      CIBW_BEFORE_ALL_MACOS: brew install boost eigen hdf5 llvm@17
+      CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
+      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
+      MACOSX_DEPLOYMENT_TARGET: 10.15
+
+    steps:
+
+      - name: checkout repo & submodules
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.16.1
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: wheels-self-hosted
+          path: ./wheelhouse/*.whl
+          retention-days: 1
+
   upload_all:
     name: Upload to PyPI
-    needs: build_wheels_cloud
+    needs: [build_wheels_cloud, build_wheels_self_hosted]
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release' && github.event.action == 'published' && github.repository == 'PalamaraLab/arg-needle-lib' }}
 

@@ -20,6 +20,8 @@
 #ifndef ARG_NEEDLE_LIB_SERIALIZE_ARG_H
 #define ARG_NEEDLE_LIB_SERIALIZE_ARG_H
 
+#include "arg.hpp"
+
 #include <string>
 
 namespace arg_utils
@@ -39,6 +41,9 @@ namespace arg_utils
  * @return Returns `true` if the file is valid according to the specified version's format, otherwise `false`.
  */
 bool validate_serialized_arg(const std::string& file_name);
+
+
+ARG deserialize_arg(const std::string& file_name, int chunk_size = 1000, int reserved_samples = -1);
 } // namespace arg_utils
 
 #endif // ARG_NEEDLE_LIB_SERIALIZE_ARG_H

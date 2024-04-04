@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "arg.hpp"
 #include "serialize_arg.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -75,4 +76,18 @@ TEST_CASE("Validate serialized arg files")
 
     std::cout.rdbuf(prevCoutBuffer); // Restore original buffer
   }
+
+  SECTION("Valid ARG")
+  {
+    const std::string valid_arg = ARG_NEEDLE_TESTDATA_DIR "/test_serialize_arg/valid.arg";
+    CHECK(arg_utils::validate_serialized_arg(valid_arg) == true);
+  }
+}
+
+TEST_CASE("Deserialize ARG")
+{
+  const std::string valid_arg = ARG_NEEDLE_TESTDATA_DIR "/test_serialize_arg/valid.arg";
+  const ARG from_arg_file = arg_utils::deserialize_arg(valid_arg);
+
+  CHECK(from_arg_file.num_nodes() == 50);
 }

@@ -93,15 +93,90 @@ template <typename T> H5::PredType getPredType()
 
 // Templated function to read a dataset into a std::vector<T>
 template<typename T>
-std::vector<T> read_dataset_to_vector(const H5::H5File& h5_file, const std::string& dset_name) {
+std::vector<T> read_dataset_to_vector_1d(const H5::H5File& h5_file, const std::string& dset_name, hssize_t start = 0, hssize_t stop = -1) {
   std::vector<T> data;
 
   try {
     H5::DataSet dataset = h5_file.openDataSet(dset_name);
     H5::DataSpace dataspace = dataset.getSpace();
-    hsize_t num_elements = dataspace.getSelectNpoints();
-    data.resize(num_elements);
-    dataset.read(data.data(), getPredType<T>());
+
+    if (dataspace.getSimpleExtentNdims() != 1) {
+      throw std::runtime_error("Dataset must be 1-dimensional");
+    }
+
+    hsize_t dims[1];
+    dataspace.getSimpleExtentDims(dims);
+    const hsize_t num_elements = dims[0];
+
+    // Adjust stop value if necessary
+    if (stop == -1 || stop > num_elements) {
+      stop = num_elements;
+    }
+
+    if (start >= stop) {
+      throw std::runtime_error("Invalid range: start must be less than stop");
+    }
+
+    const hsize_t block_size = stop - start;
+    data.resize(block_size);
+
+    // Define hyperslab in the dataset
+    hsize_t offset[1] = {static_cast<hsize_t>(start)};
+    hsize_t count[1] = {block_size};
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+    // Define the memory dataspace
+    H5::DataSpace memspace(1, count);
+    dataset.read(data.data(), getPredType<T>(), memspace, dataspace);
+  } catch (const H5::Exception& e) {
+    throw std::runtime_error("Failed to read dataset `" + dset_name + "`: " + e.getDetailMsg());
+  }
+
+  return data;
+}
+
+template <typename T>
+std::vector<std::array<T, 2>> read_dataset_to_vector_2d(
+    const H5::H5File& h5_file, const std::string& dset_name, hssize_t start = 0, hssize_t stop = -1)
+{
+  std::vector<std::array<T, 2>> data;
+
+  try {
+    H5::DataSet dataset = h5_file.openDataSet(dset_name);
+    H5::DataSpace dataspace = dataset.getSpace();
+
+    if (dataspace.getSimpleExtentNdims() != 2) {
+      throw std::runtime_error("Dataset must be 2-dimensional");
+    }
+
+    hsize_t dims[2];
+    dataspace.getSimpleExtentDims(dims);
+    if (dims[1] != 2) {
+      throw std::runtime_error("Second dimension of the dataset must be 2");
+    }
+
+    hsize_t num_elements = dims[0];
+
+    // Adjust stop value if necessary
+    if (stop == -1 || stop > num_elements) {
+      stop = num_elements;
+    }
+
+    if (start >= stop) {
+      throw std::runtime_error("Invalid range: start must be less than stop");
+    }
+
+    hsize_t block_size = stop - start;
+    data.resize(block_size);
+
+    // Define hyperslab in the dataset
+    hsize_t offset[2] = {static_cast<hsize_t>(start), 0}; // Start from 'start', covering the entire 2nd dimension
+    hsize_t count[2] = {block_size, 2}; // Number of elements to read in the 1st dim and include all of the 2nd dim
+    dataspace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+    // Define the memory dataspace
+    H5::DataSpace memspace(2, count);
+    dataset.read(data.data(), getPredType<T>(), memspace, dataspace);
   } catch (const H5::Exception& e) {
     throw std::runtime_error("Failed to read dataset `" + dset_name + "`: " + e.getDetailMsg());
   }
@@ -187,10 +262,10 @@ ARG deserialize_arg_v1(const H5::H5File& h5_file, const int reserved_samples)
   const int num_edges = read_int_attribute(h5_file, "num_edges");
 
   // Read datasets
-  std::vector<uint8_t> raw_flags = read_dataset_to_vector<uint8_t>(h5_file, "flags");
-  std::vector<double> raw_times = read_dataset_to_vector<double>(h5_file, "times");
-  std::vector<int> raw_edge_ids = read_dataset_to_vector<int>(h5_file, "edge_ids");
-  std::vector<double> raw_edge_ranges = read_dataset_to_vector<double>(h5_file, "edge_ranges");
+  std::vector<uint8_t> raw_flags = read_dataset_to_vector_1d<uint8_t>(h5_file, "flags");
+  std::vector<double> raw_times = read_dataset_to_vector_1d<double>(h5_file, "times");
+  std::vector<int> raw_edge_ids = read_dataset_to_vector_1d<int>(h5_file, "edge_ids");
+  std::vector<double> raw_edge_ranges = read_dataset_to_vector_1d<double>(h5_file, "edge_ranges");
 
   assert(raw_flags.size() == num_nodes);
   assert(raw_times.size() == num_nodes);
@@ -234,61 +309,27 @@ ARG deserialize_arg_v2(const H5::H5File& h5_file, const int chunk_size, const in
 
   ARG arg(dp);
 
-  // Assuming ARG has a constructor that takes DeserializationParams
-  const int num_nodes = dp.num_nodes;
-  int num_nodes_written = 0;
+  // Process {chunk_size} nodes at a time, adding each chunk to the ARG as we go
+  const auto num_nodes = static_cast<hssize_t>(dp.num_nodes);
+  hssize_t num_nodes_written = 0;
 
-  // while (num_nodes_written < num_nodes) {
-  //   const int range_lo = num_nodes_written;
-  //   const int range_hi = std::min(num_nodes_written + chunk_size, num_nodes);
-  //   const int range_len = range_hi - range_lo;
-  //
-  //   std::vector<double> node_heights = file.getDataSet("times").readChunk<double>(range_lo, range_len);
-  //   std::vector<bool> is_sample = file.getDataSet("flags").readChunk<bool>(range_lo, range_len);
-  //
-  //   if (file.getAttr("node_bounds").readBool()) {
-  //     auto node_bounds_data = file.getDataSet("node_bounds").readChunk<std::pair<double, double>>(range_lo, range_len);
-  //     arg.deserialize_add_nodes(node_heights, is_sample, node_bounds_data);
-  //   } else {
-  //     arg.deserialize_add_nodes(node_heights, is_sample);
-  //   }
-  //
-  //   num_nodes_written += range_len;
-  // }
-  //
-  // int num_edges = file.getAttr("num_edges").readInt();
-  // int num_edges_written = 0;
-  // while (num_edges_written < num_edges) {
-  //   int range_lo = num_edges_written;
-  //   int range_hi = std::min(num_edges_written + chunk_size, num_edges);
-  //   int range_len = range_hi - range_lo;
-  //
-  //   auto edge_ids = file.getDataSet("edge_ids").readChunk<std::pair<int, int>>(range_lo, range_len);
-  //   auto edge_ranges = file.getDataSet("edge_ranges").readChunk<std::pair<double, double>>(range_lo, range_len);
-  //
-  //   arg.deserialize_add_edges(edge_ids, edge_ranges);
-  //
-  //   num_edges_written += range_len;
-  // }
-  //
-  // if (file.getAttr("mutations").readBool()) {
-  //   int num_mutations = file.getAttr("num_mutations").readInt();
-  //   int num_mutations_written = 0;
-  //   while (num_mutations_written < num_mutations) {
-  //     int range_lo = num_mutations_written;
-  //     int range_hi = std::min(num_mutations_written + chunk_size, num_mutations);
-  //     int range_len = range_hi - range_lo;
-  //
-  //     auto mut_pos = file.getDataSet("mutations/positions").readChunk<double>(range_lo, range_len);
-  //     auto mut_hts = file.getDataSet("mutations/heights").readChunk<double>(range_lo, range_len);
-  //     auto mut_sid = file.getDataSet("mutations/site_ids").readChunk<int>(range_lo, range_len);
-  //     auto mut_eid = file.getDataSet("mutations/edge_ids").readChunk<std::pair<int, int>>(range_lo, range_len);
-  //
-  //     arg.deserialize_add_mutations(mut_pos, mut_hts, mut_sid, mut_eid);
-  //
-  //     num_mutations_written += range_len;
-  //   }
-  // }
+  while (num_nodes_written < num_nodes){
+    const hssize_t range_lo = num_nodes_written;
+    const hssize_t range_hi = std::min(num_nodes_written + chunk_size, num_nodes);
+
+    const std::vector<double> node_heights = read_dataset_to_vector_1d<double>(h5_file, "times", range_lo, range_hi);
+    const std::vector<uint8_t> is_sample = read_dataset_to_vector_1d<uint8_t>(h5_file, "flags", range_lo, range_hi);
+
+    if (read_bool_attribute(h5_file, "node_bounds"))
+    {
+      const std::vector<std::array<double, 2>> node_bounds_data = read_dataset_to_vector_2d<double>(h5_file, "node_bounds", range_lo, range_hi);
+      arg.deserialize_add_nodes(node_heights, is_sample, node_bounds_data);
+    } else {
+      arg.deserialize_add_nodes(node_heights, is_sample);
+    }
+
+    num_nodes_written += static_cast<hssize_t>(node_heights.size());
+  }
 
   return arg;
 }

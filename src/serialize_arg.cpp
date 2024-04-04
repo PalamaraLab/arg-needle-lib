@@ -43,12 +43,14 @@ bool check_attribute(const H5::H5File& h5_file, const std::string& expected_attr
 
 bool check_dataset(const H5::H5File& h5_file, const std::string& expected_dset)
 {
-  if (!h5_file.nameExists(expected_dset)) {
+  try {
+    auto dset = h5_file.openDataSet(expected_dset);
+    return true;
+  } catch (const H5::Exception&) {
     std::cerr << "Expected file " << h5_file.getFileName() << " to include dataset `" << expected_dset << "`"
               << std::endl;
     return false;
   }
-  return true;
 }
 
 bool read_bool_attribute(const H5::H5File& file, const std::string& attrName)

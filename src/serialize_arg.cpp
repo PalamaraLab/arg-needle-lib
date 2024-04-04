@@ -35,46 +35,88 @@ extern "C" {
 namespace
 {
 
+bool check_attribute(const H5::H5File& h5_file, const std::string& expected_attr)
+{
+  if (!h5_file.attrExists(expected_attr)) {
+    std::cerr << "Expected file " << h5_file.getFileName() << " to include attribute `" << expected_attr << "`"
+              << std::endl;
+    return false;
+  }
+  return true;
+}
 
-bool validate_serialized_arg_v1(const std::string& file_name)
+bool check_dataset(const H5::H5File& h5_file, const std::string& expected_dset)
+{
+  if (!h5_file.nameExists(expected_dset)) {
+    std::cerr << "Expected file " << h5_file.getFileName() << " to include dataset `" << expected_dset << "`"
+              << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool read_bool_attribute(const H5::H5File& file, const std::string& attrName)
+{
+  bool value = false;
+
+  try {
+    // Open the attribute from the file
+    H5::Attribute attribute = file.openAttribute(attrName);
+
+    // Read the attribute, assuming it was stored as H5T_NATIVE_HBOOL
+    unsigned buffer;
+    attribute.read(H5::PredType::NATIVE_HBOOL, &buffer);
+
+    // Convert the integer buffer to bool
+    value = (buffer != 0u);
+  } catch (const H5::Exception& e) {
+    // Handle exceptions: attribute not found, wrong type, etc.
+    std::cerr << "Error reading attribute `" << attrName << "`: " << e.getDetailMsg() << std::endl;
+  }
+
+  return value;
+}
+
+int read_int_attribute(const H5::H5File& file, const std::string& attrName)
+{
+  int value{};
+
+  try {
+    // Open the attribute from the file
+    H5::Attribute attribute = file.openAttribute(attrName);
+
+    // Read the attribute, assuming it was stored as H5T_NATIVE_INT
+    attribute.read(H5::PredType::NATIVE_INT, &value);
+  } catch (const H5::Exception& e) {
+    // Handle exceptions: attribute not found, wrong type, etc.
+    std::cerr << "Error reading attribute `" << attrName << "`: " << e.getDetailMsg() << std::endl;
+    exit(0);
+  }
+
+  return value;
+}
+
+bool validate_serialized_arg_v1(const H5::H5File& h5_file)
 {
   // Expected attributes and datasets
   std::vector<std::string> expected_attrs = {"num_nodes", "num_edges", "num_mutations", "offset", "chromosome",
       "sequence_length", "datetime_created", "arg_file_version"};
   std::vector<std::string> expected_dsets = {"flags", "times", "edge_ranges", "edge_ids"};
 
-  // Open the HDF5 file
-  const hid_t file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (file_id < 0) {
-    std::cerr << "Could not open file: " << file_name << std::endl;
-    return false;
-  }
-
   bool is_valid = true;
 
-  // Check for the presence of expected attributes
   for (const auto& attr : expected_attrs) {
-    if (H5Aexists(file_id, attr.c_str()) <= 0) {
-      std::cerr << "Expected file " << file_name << " to include attribute `" << attr << "`" << std::endl;
-      is_valid = false;
-    }
+    is_valid = check_attribute(h5_file, attr);
   }
 
-  // Check for the presence of expected datasets only if attributes are valid
   for (const auto& dset : expected_dsets) {
-    if (const hid_t dset_id = H5Dopen2(file_id, dset.c_str(), H5P_DEFAULT); dset_id < 0) {
-      std::cerr << "Expected file " << file_name << " to include dataset `" << dset << "`" << std::endl;
-      is_valid = false;
-    } else {
-      H5Dclose(dset_id);
-    }
+    is_valid = check_dataset(h5_file, dset);
   }
 
-  H5Fclose(file_id);
   return is_valid;
 }
 
-bool validate_serialized_arg_v2(const std::string& file_name)
+bool validate_serialized_arg_v2(const H5::H5File& h5_file)
 {
   // Expected attributes and datasets
   std::vector<std::string> expected_attrs = {"num_nodes", "num_edges", "node_bounds", "num_mutations", "mutations",
@@ -82,50 +124,23 @@ bool validate_serialized_arg_v2(const std::string& file_name)
   std::vector<std::string> expected_dsets = {"flags", "times", "edge_ranges", "edge_ids"};
   std::vector<std::string> optional_dsets = {"mutations", "node_bounds"};
 
-  // Open the HDF5 file
-  const hid_t file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (file_id < 0) {
-    std::cerr << "Could not open file: " << file_name << std::endl;
-    return false;
-  }
-
   bool is_valid = true;
 
-  // Check for the presence of expected attributes
   for (const auto& attr : expected_attrs) {
-    if (H5Aexists(file_id, attr.c_str()) <= 0) {
-      std::cerr << "Expected file " << file_name << " to include attribute `" << attr << "`" << std::endl;
-      is_valid = false;
-    }
+    is_valid = check_attribute(h5_file, attr);
   }
 
-  // Check for the presence of optional datasets, appending them to the list of expected datasets if appropriate
+  // The existence of optional datasets is marked by bool attributes of the same name
   for (const auto& dset_name : optional_dsets) {
-    if (const hid_t attr_id = H5Aopen(file_id, dset_name.c_str(), H5P_DEFAULT); attr_id < 0) {
-      std::cerr << "Unable to open `" << dset_name << "` attribute in file: " << file_name << std::endl;
-      is_valid = false;
-    } else {
-      int dset_flag = 0;
-      H5Aread(attr_id, H5T_NATIVE_INT, &dset_flag);
-      H5Aclose(attr_id);
-      if (dset_flag) {
-        expected_dsets.emplace_back(dset_name);
-      }
+    if (read_bool_attribute(h5_file, dset_name)) {
+      expected_dsets.emplace_back(dset_name);
     }
   }
 
-  // Check that all expected datasets exist
   for (const auto& dset : expected_dsets) {
-    const hid_t dset_id = H5Dopen2(file_id, dset.c_str(), H5P_DEFAULT);
-    if (dset_id < 0) {
-      std::cerr << "Expected file " << file_name << " to include dataset `" << dset << "`" << std::endl;
-      is_valid = false;
-    } else {
-      H5Dclose(dset_id);
-    }
+    is_valid = check_dataset(h5_file, dset);
   }
 
-  H5Fclose(file_id);
   return is_valid;
 }
 
@@ -285,40 +300,42 @@ bool arg_utils::validate_serialized_arg(const std::string& file_name)
     return false;
   }
 
-  // Open the HDF5 file
-  const hid_t file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (file_id < 0) {
+  if (!H5Fis_hdf5(file_name.c_str()))
+  {
     std::cout << "File: " << file_name << " is not a valid HDF5 file" << std::endl;
     return false;
   }
 
-  // Check for the 'arg_file_version' attribute
-  if (H5Aexists(file_id, "arg_file_version") <= 0) {
-    std::cout << "File: " << file_name
-              << " is not a valid arg file because it does not contain `arg_file_version` attribute" << std::endl;
-    H5Fclose(file_id);
+  try {
+    H5::H5File h5_file(file_name, H5F_ACC_RDONLY);
+
+    // Check for the 'arg_file_version' attribute
+    if (!check_attribute(h5_file, "arg_file_version")) {
+      std::cout << "File: " << file_name
+                << " is not a valid arg file because it does not contain `arg_file_version` attribute" << std::endl;
+      return false;
+    }
+
+    const int arg_file_version = read_int_attribute(h5_file, "arg_file_version");
+
+    // Validate file version
+    if (arg_file_version == 1) {
+      return validate_serialized_arg_v1(h5_file);
+    }
+    if (arg_file_version == 2) {
+      return validate_serialized_arg_v2(h5_file);
+    }
+
+    std::cout << "Arg file version (" << arg_file_version << ") is not supported; valid versions are 1, 2."
+              << std::endl;
+    return false;
+
+  } catch (const H5::Exception& e) {
+    std::cerr << "HDF5 error on file: " << file_name << std::endl;
+    std::cerr << e.getDetailMsg() << std::endl;
     return false;
   }
-
-  // Read the 'arg_file_version' attribute
-  const hid_t attr_id = H5Aopen(file_id, "arg_file_version", H5P_DEFAULT);
-  int arg_file_version;
-  H5Aread(attr_id, H5T_NATIVE_INT, &arg_file_version);
-  H5Aclose(attr_id);
-  H5Fclose(file_id);
-
-  // Validate file version
-  if (arg_file_version == 1) {
-    return validate_serialized_arg_v1(file_name);
-  }
-  if (arg_file_version == 2) {
-    return validate_serialized_arg_v2(file_name);
-  }
-
-  std::cout << "Arg file version (" << arg_file_version << ") is not supported; valid versions are 1, 2." << std::endl;
-  return false;
 }
-
 
 ARG arg_utils::deserialize_arg(const std::string& file_name, const int chunk_size, const int reserved_samples) {
 

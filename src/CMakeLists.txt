@@ -25,7 +25,7 @@ find_package(Eigen3 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # Find HDF5
-find_package(HDF5 COMPONENTS C HL CXX REQUIRED)
+find_package(HDF5 COMPONENTS CXX REQUIRED)
 
 set(
         arg_needle_lib_src
@@ -79,7 +79,7 @@ target_include_directories(
 set_target_properties(arg_needle_lib PROPERTIES PUBLIC_HEADER "${arg_needle_lib_hdr}")
 
 
-target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams Threads::Threads hdf5::hdf5 hdf5::hdf5_hl hdf5::hdf5_cpp)
+target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams Threads::Threads HDF5::HDF5)
 target_link_libraries(arg_needle_lib PUBLIC Eigen3::Eigen)
 
 # Turning off warnings for now

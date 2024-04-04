@@ -21,10 +21,6 @@
 
 #include "deserialization_params.hpp"
 
-extern "C" {
-#include "hdf5.h"
-#include "H5LTpublic.h"
-}
 #include "H5Cpp.h"
 
 #include <iostream>
@@ -75,6 +71,42 @@ bool read_bool_attribute(const H5::H5File& file, const std::string& attrName)
   }
 
   return value;
+}
+
+template <class T> struct dependent_false : std::false_type {
+};
+
+template <class T> inline constexpr bool dependent_false_v = dependent_false<T>::value;
+
+template <typename T> H5::PredType getPredType()
+{
+  if constexpr (std::is_same_v<T, double>) {
+    return H5::PredType::NATIVE_DOUBLE;
+  } else if constexpr (std::is_same_v<T, int>) {
+    return H5::PredType::NATIVE_INT;
+  } else if constexpr (std::is_same_v<T, uint8_t>) {
+    return H5::PredType::NATIVE_UINT8;
+  } else {
+    static_assert(dependent_false_v<T>, "Unsupported type");
+  }
+}
+
+// Templated function to read a dataset into a std::vector<T>
+template<typename T>
+std::vector<T> read_dataset_to_vector(const H5::H5File& h5_file, const std::string& dset_name) {
+  std::vector<T> data;
+
+  try {
+    H5::DataSet dataset = h5_file.openDataSet(dset_name);
+    H5::DataSpace dataspace = dataset.getSpace();
+    hsize_t num_elements = dataspace.getSelectNpoints();
+    data.resize(num_elements);
+    dataset.read(data.data(), getPredType<T>());
+  } catch (const H5::Exception& e) {
+    throw std::runtime_error("Failed to read dataset `" + dset_name + "`: " + e.getDetailMsg());
+  }
+
+  return data;
 }
 
 int read_int_attribute(const H5::H5File& file, const std::string& attrName)
@@ -144,46 +176,26 @@ bool validate_serialized_arg_v2(const H5::H5File& h5_file)
   return is_valid;
 }
 
-ARG deserialize_arg_v1(const std::string& file_name, const int reserved_samples)
+ARG deserialize_arg_v1(const H5::H5File& h5_file, const int reserved_samples)
 {
-  // Open the HDF5 file
-  const hid_t file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 
   // Read attributes
-  int offset;
-  H5LTget_attribute_int(file_id, ".", "offset", &offset);
-
-  int chromosome;
-  H5LTget_attribute_int(file_id, ".", "chromosome", &chromosome);
-
-  int sequence_length;
-  H5LTget_attribute_int(file_id, ".", "sequence_length", &sequence_length);
-
-  int num_nodes;
-  H5LTget_attribute_int(file_id, ".", "num_nodes", &num_nodes);
-
-  int num_edges;
-  H5LTget_attribute_int(file_id, ".", "num_edges", &num_edges);
+  const int offset = read_int_attribute(h5_file, "offset");
+  const int chromosome = read_int_attribute(h5_file, "chromosome");
+  const int sequence_length = read_int_attribute(h5_file, "sequence_length");
+  const int num_nodes = read_int_attribute(h5_file, "num_nodes");
+  const int num_edges = read_int_attribute(h5_file, "num_edges");
 
   // Read datasets
-  std::vector<uint8_t> raw_flags;
-  raw_flags.resize(num_nodes);
-  H5LTread_dataset(file_id, "flags", H5T_NATIVE_UCHAR, raw_flags.data());
+  std::vector<uint8_t> raw_flags = read_dataset_to_vector<uint8_t>(h5_file, "flags");
+  std::vector<double> raw_times = read_dataset_to_vector<double>(h5_file, "times");
+  std::vector<int> raw_edge_ids = read_dataset_to_vector<int>(h5_file, "edge_ids");
+  std::vector<double> raw_edge_ranges = read_dataset_to_vector<double>(h5_file, "edge_ranges");
 
-  std::vector<double> raw_times;
-  raw_times.resize(num_nodes);
-  H5LTread_dataset(file_id, "times", H5T_NATIVE_DOUBLE, raw_times.data());
-
-  std::vector<int> raw_edge_ids;
-  raw_edge_ids.resize(2 * num_edges);
-  H5LTread_dataset(file_id, "edge_ids", H5T_NATIVE_INT, raw_edge_ids.data());
-
-  std::vector<double> raw_edge_ranges;
-  raw_edge_ranges.resize(2 * num_edges);
-  H5LTread_dataset(file_id, "edge_ranges", H5T_NATIVE_DOUBLE, raw_edge_ranges.data());
-
-  // Close the HDF5 file
-  H5Fclose(file_id);
+  assert(raw_flags.size() == num_nodes);
+  assert(raw_times.size() == num_nodes);
+  assert(raw_edge_ids.size() == 2 * num_edges);
+  assert(raw_edge_ranges.size() == 2 * num_edges);
 
   // Translate from raw data to required data structures
   std::deque<bool> is_sample;
@@ -209,24 +221,15 @@ ARG deserialize_arg_v1(const std::string& file_name, const int reserved_samples)
   return arg;
 }
 
-ARG deserialize_arg_v2(const std::string& file_name, const int chunk_size, const int reserved_samples)
+ARG deserialize_arg_v2(const H5::H5File& h5_file, const int chunk_size, const int reserved_samples)
 {
-  H5::H5File file(file_name, H5F_ACC_RDONLY);
-
-  auto ReadIntAttr = [&file](const std::string& attr_name) {
-    const H5::Attribute attr = file.openAttribute(attr_name);
-    int value;
-    attr.read(attr.getIntType(), &value);
-    return value;
-  };
-
   DeserializationParams dp;
-  dp.start = ReadIntAttr("start");
-  dp.end = ReadIntAttr("end");
-  dp.num_nodes = ReadIntAttr("num_nodes");
-  dp.offset = ReadIntAttr("offset");
-  dp.chromosome = ReadIntAttr("chromosome");
-  dp.threaded_samples = ReadIntAttr("threaded_samples");
+  dp.start = read_int_attribute(h5_file, "start");
+  dp.end = read_int_attribute(h5_file, "end");
+  dp.num_nodes = read_int_attribute(h5_file, "num_nodes");
+  dp.offset = read_int_attribute(h5_file, "offset");
+  dp.chromosome = read_int_attribute(h5_file, "chromosome");
+  dp.threaded_samples = read_int_attribute(h5_file, "threaded_samples");
   dp.reserved_samples = reserved_samples;
 
   ARG arg(dp);
@@ -337,37 +340,30 @@ bool arg_utils::validate_serialized_arg(const std::string& file_name)
   }
 }
 
-ARG arg_utils::deserialize_arg(const std::string& file_name, const int chunk_size, const int reserved_samples) {
-
+ARG arg_utils::deserialize_arg(const std::string& file_name, const int chunk_size, const int reserved_samples)
+{
   if (!validate_serialized_arg(file_name)) {
     throw std::runtime_error("Invalid ARG file: " + file_name);
   }
 
-  // Open the HDF5 file
-  const hid_t file_id = H5Fopen(file_name.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (file_id < 0) {
-    throw std::runtime_error("Could not open file: " + file_name);
-  }
+  try {
+    H5::H5File h5_file(file_name, H5F_ACC_RDONLY);
 
-  // Read the 'arg_file_version' attribute
-  int arg_file_version = 0;
-  if (const hid_t attr_id = H5Aopen(file_id, "arg_file_version", H5P_DEFAULT); attr_id >= 0) {
-    H5Aread(attr_id, H5T_NATIVE_INT, &arg_file_version);
-    H5Aclose(attr_id);
-  } else {
-    H5Fclose(file_id);
-    throw std::runtime_error("arg_file_version attribute missing in file: " + file_name);
-  }
+    const int arg_file_version = read_int_attribute(h5_file, "arg_file_version");
 
-  H5Fclose(file_id);
+    if (arg_file_version == 1) {
+      return deserialize_arg_v1(h5_file, reserved_samples);
+    }
+    if (arg_file_version == 2) {
+      return deserialize_arg_v2(h5_file, chunk_size, reserved_samples);
+    }
 
-  // Conditional logic based on the file version
-  if (arg_file_version == 1) {
-    return deserialize_arg_v1(file_name, reserved_samples);
-  }
-  if (arg_file_version == 2) {
-    return deserialize_arg_v2(file_name, chunk_size, reserved_samples);
-  }
+    throw std::logic_error(
+        "Reached an unsupported arg_file_version after validation: " + std::to_string(arg_file_version));
 
-  throw std::logic_error("Reached an unsupported arg_file_version after validation: " + std::to_string(arg_file_version));
+  } catch (const H5::Exception& e) {
+    std::cerr << "HDF5 error on file: " << file_name << std::endl;
+    std::cerr << e.getDetailMsg() << std::endl;
+    throw std::runtime_error("Unable to deserialize arg file: " + file_name);
+  }
 }

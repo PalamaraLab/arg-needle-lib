@@ -212,9 +212,9 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
   }
 
   // assemble all ARG data for the deserialisation constructor
-  vector<arg_real_t> node_heights(num_nodes_in_range, 0);
-  vector<vector<arg_real_t>> node_bounds(num_nodes_in_range);
-  vector<bool> is_sample(num_nodes_in_range, false);
+  vector<double> node_heights(num_nodes_in_range, 0);
+  vector<std::array<double, 2>> node_bounds(num_nodes_in_range);
+  vector<uint8_t> is_sample(num_nodes_in_range, false);
 
   for (int old_node_id = 0; old_node_id < node_is_in_range.size(); old_node_id++) {
     auto node = arg.arg_nodes.at(old_node_id).get();
@@ -222,8 +222,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
       int new_node_id = reassigned_node_id[node->ID];
       is_sample[new_node_id] = arg.is_leaf(old_node_id);
       node_heights[new_node_id] = node->height;
-      vector<arg_real_t> current_node_bound{std::max(node->start - trim_start, arg_real_t(0)),
-                                            std::min(node->end, trim_end) - trim_start};
+      std::array<double, 2> current_node_bound{
+          std::max(node->start - trim_start, arg_real_t(0)), std::min(node->end, trim_end) - trim_start};
       node_bounds[new_node_id] = current_node_bound;
     }
   }

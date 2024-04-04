@@ -197,9 +197,9 @@ ARG::ARG(const DeserializationParams& dp)
   }
 }
 
-void ARG::deserialize_add_nodes(const std::vector<arg_real_t>& node_heights,
-                                const std::vector<bool>& is_sample,
-                                const std::vector<std::vector<arg_real_t>>& node_bounds) {
+void ARG::deserialize_add_nodes(const std::vector<double>& node_heights,
+                                const std::vector<uint8_t>& is_sample,
+                                const std::vector<std::array<double, 2>>& node_bounds) {
 
   if (node_heights.size() != is_sample.size()) {
     throw std::logic_error(THROW_LINE("Expected sane number of node heights and sample flags"));

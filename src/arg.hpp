@@ -29,6 +29,7 @@
 #include "site.hpp"
 #include "types.hpp"
 
+#include <array>
 #include <deque>
 #include <memory>
 #include <random>
@@ -170,9 +171,9 @@ public:
      * @brief add a chunk of nodes during deserialization
      *
      */
-    void deserialize_add_nodes(const std::vector<arg_real_t>& node_heights,
-                               const std::vector<bool>& is_sample,
-                               const std::vector<std::vector<arg_real_t>>& node_bounds = {});
+    void deserialize_add_nodes(const std::vector<double>& node_heights,
+                               const std::vector<uint8_t>& is_sample,
+                               const std::vector<std::array<double, 2>>& node_bounds = {});
 
     /**
      * @brief add a chunk of edges during deserialization

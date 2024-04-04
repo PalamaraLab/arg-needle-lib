@@ -59,11 +59,11 @@ bool read_bool_attribute(const H5::H5File& file, const std::string& attrName)
 
   try {
     // Open the attribute from the file
-    H5::Attribute attribute = file.openAttribute(attrName);
+    const H5::Attribute attribute = file.openAttribute(attrName);
 
     // Read the attribute, assuming it was stored as H5T_NATIVE_HBOOL
-    unsigned buffer;
-    attribute.read(H5::PredType::NATIVE_HBOOL, &buffer);
+    uint8_t buffer{};
+    attribute.read(attribute.getDataType(), &buffer);
 
     // Convert the integer buffer to bool
     value = (buffer != 0u);

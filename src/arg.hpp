@@ -189,7 +189,7 @@ public:
     void deserialize_add_mutations(const std::vector<arg_real_t>& positions,
                                    const std::vector<arg_real_t>& heights,
                                    const std::vector<int>& site_ids,
-                                   const std::vector<std::vector<int>>& edge_ids);
+                                   const std::vector<std::array<int, 2>>& edge_ids);
 
     /**
      * @brief get map between positions and sites, updating that map if necessary

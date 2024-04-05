@@ -252,7 +252,7 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
     positions.reserve(arg.get_num_sites());
     vector<arg_real_t> heights;
     heights.reserve(arg.get_num_sites());
-    vector<vector<int>> mutation_edge_ids;
+    vector<std::array<int, 2>> mutation_edge_ids;
     mutation_edge_ids.reserve(arg.get_num_sites());
 
     for (auto const& entry : arg.get_mutations()) {
@@ -261,8 +261,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
         num_sites_in_range++;
         positions.emplace_back(mutation->position - trim_start);
         heights.emplace_back(mutation->height);
-        vector<int> mutation_edge_id{reassigned_node_id[mutation->edge->child->ID],
-                                     reassigned_node_id[mutation->edge->parent->ID]};
+        std::array<int, 2> mutation_edge_id{
+            reassigned_node_id[mutation->edge->child->ID], reassigned_node_id[mutation->edge->parent->ID]};
         mutation_edge_ids.emplace_back(mutation_edge_id);
       }
     }

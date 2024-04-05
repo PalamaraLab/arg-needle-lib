@@ -263,7 +263,7 @@ void ARG::deserialize_add_edges(const std::vector<std::array<int, 2>>& edge_ids,
 void ARG::deserialize_add_mutations(const std::vector<arg_real_t>& positions,
                                     const std::vector<arg_real_t>& heights,
                                     const std::vector<int>& site_ids,
-                                    const std::vector<std::vector<int>>& edge_ids) {
+                                    const std::vector<std::array<int, 2>>& edge_ids) {
 
   if (positions.size() != heights.size() || positions.size() != site_ids.size() ||
       positions.size() != edge_ids.size()) {

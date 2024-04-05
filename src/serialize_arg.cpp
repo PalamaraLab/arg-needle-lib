@@ -312,25 +312,49 @@ ARG deserialize_arg_v2(const H5::H5File& h5_file, const int chunk_size, const in
   ARG arg(dp);
 
   // Process {chunk_size} nodes at a time, adding each chunk to the ARG as we go
-  const auto num_nodes = static_cast<hssize_t>(dp.num_nodes);
-  hssize_t num_nodes_written = 0;
+  {
+    const auto num_nodes = static_cast<hssize_t>(dp.num_nodes);
+    hssize_t num_nodes_written = 0;
 
-  while (num_nodes_written < num_nodes){
-    const hssize_t range_lo = num_nodes_written;
-    const hssize_t range_hi = std::min(num_nodes_written + chunk_size, num_nodes);
+    while (num_nodes_written < num_nodes) {
+      const hssize_t range_lo = num_nodes_written;
+      const hssize_t range_hi = std::min(num_nodes_written + chunk_size, num_nodes);
 
-    const std::vector<double> node_heights = read_dataset_to_vector_1d<double>(h5_file, "times", range_lo, range_hi);
-    const std::vector<uint8_t> is_sample = read_dataset_to_vector_1d<uint8_t>(h5_file, "flags", range_lo, range_hi);
+      const std::vector<double> node_heights = read_dataset_to_vector_1d<double>(h5_file, "times", range_lo, range_hi);
+      const std::vector<uint8_t> is_sample = read_dataset_to_vector_1d<uint8_t>(h5_file, "flags", range_lo, range_hi);
 
-    if (read_bool_attribute(h5_file, "node_bounds"))
-    {
-      const std::vector<std::array<double, 2>> node_bounds_data = read_dataset_to_vector_2d<double>(h5_file, "node_bounds", range_lo, range_hi);
-      arg.deserialize_add_nodes(node_heights, is_sample, node_bounds_data);
-    } else {
-      arg.deserialize_add_nodes(node_heights, is_sample);
+      if (read_bool_attribute(h5_file, "node_bounds")) {
+        const std::vector<std::array<double, 2>> node_bounds_data =
+            read_dataset_to_vector_2d<double>(h5_file, "node_bounds", range_lo, range_hi);
+        arg.deserialize_add_nodes(node_heights, is_sample, node_bounds_data);
+      } else {
+        arg.deserialize_add_nodes(node_heights, is_sample);
+      }
+
+      num_nodes_written += static_cast<hssize_t>(node_heights.size());
     }
+  }
 
-    num_nodes_written += static_cast<hssize_t>(node_heights.size());
+  // Process {chunk_size} edges at a time, adding each chunk to the ARG as we go
+  {
+    const auto num_edges = static_cast<hssize_t>(read_int_attribute(h5_file, "num_edges"));
+    hssize_t num_edges_written = 0;
+
+    while (num_edges_written < num_edges) {
+
+      const hssize_t range_lo = num_edges_written;
+      const hssize_t range_hi = std::min(num_edges_written + chunk_size, num_edges);
+
+      const std::vector<std::array<int, 2>> edge_id_data =
+          read_dataset_to_vector_2d<int>(h5_file, "edge_ids", range_lo, range_hi);
+
+      const std::vector<std::array<double, 2>> edge_range_data =
+          read_dataset_to_vector_2d<double>(h5_file, "edge_ranges", range_lo, range_hi);
+
+      arg.deserialize_add_edges(edge_id_data, edge_range_data);
+
+      num_edges_written += static_cast<hssize_t>(edge_id_data.size());
+    }
   }
 
   return arg;

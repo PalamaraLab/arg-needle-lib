@@ -179,8 +179,8 @@ public:
      * @brief add a chunk of edges during deserialization
      *
      */
-    void deserialize_add_edges(const std::vector<std::vector<int>>& edge_ids,
-                               const std::vector<std::vector<arg_real_t>>& edge_ranges);
+    void deserialize_add_edges(const std::vector<std::array<int, 2>>& edge_ids,
+                               const std::vector<std::array<double, 2>>& edge_ranges);
 
     /**
      * @brief add a chunk of mutations during deserialization

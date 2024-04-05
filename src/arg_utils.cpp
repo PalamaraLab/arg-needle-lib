@@ -168,9 +168,9 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
     throw std::logic_error(THROW_LINE("trim start is after trim end"));
   }
   vector<int> node_is_in_range(arg.num_nodes(), 0);
-  vector<vector<int>> edge_ids;
+  vector<std::array<int, 2>> edge_ids;
   edge_ids.reserve(arg.num_edges());
-  vector<vector<arg_real_t>> edge_ranges;
+  vector<std::array<double, 2>> edge_ranges;
   edge_ranges.reserve(arg.num_edges());
 
   for (auto const& map_entry : arg.arg_nodes) {
@@ -181,8 +181,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
         auto edge = node_map_entry.second.get();
         // a node is in range iff it has in range edges
         if (edge->start < trim_end && edge->end > trim_start) {
-          vector<int> edge_id{edge->child->ID, edge->parent->ID};
-          vector<arg_real_t> edge_range{std::max(edge->start - trim_start, arg_real_t(0)),
+          std::array<int, 2> edge_id{edge->child->ID, edge->parent->ID};
+          std::array<double, 2> edge_range{std::max(edge->start - trim_start, arg_real_t(0)),
                                         std::min(edge->end, trim_end) - trim_start};
           node_is_in_range[edge->child->ID] = 1;
           node_is_in_range[edge->parent->ID] = 1;
@@ -207,7 +207,7 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
   for (auto& elem : edge_ids) {
     int new_child_id = reassigned_node_id[elem[0]];
     int new_parent_id = reassigned_node_id[elem[1]];
-    vector<int> new_ids{new_child_id, new_parent_id};
+    std::array<int, 2> new_ids{new_child_id, new_parent_id};
     elem = new_ids;
   }
 

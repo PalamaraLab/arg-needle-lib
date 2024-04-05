@@ -233,8 +233,8 @@ void ARG::deserialize_add_nodes(const std::vector<double>& node_heights,
   }
 }
 
-void ARG::deserialize_add_edges(const std::vector<std::vector<int>>& edge_ids,
-                                const std::vector<std::vector<arg_real_t>>& edge_ranges) {
+void ARG::deserialize_add_edges(const std::vector<std::array<int, 2>>& edge_ids,
+                                const std::vector<std::array<double, 2>>& edge_ranges) {
 
   if (edge_ids.size() != edge_ranges.size() || edge_ids.empty()) {
     throw std::logic_error(THROW_LINE("Expected non-zero & same number of edge ids and ranges"));

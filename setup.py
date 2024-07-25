@@ -140,7 +140,7 @@ setup(
         'click',
         'h5py',
         'msprime>=1.0.0',
-        'numpy',
+        'numpy<2',
         'pandas',
         'scipy',
         'tskit>=0.1.5',

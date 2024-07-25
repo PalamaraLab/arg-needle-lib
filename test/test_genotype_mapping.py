@@ -73,7 +73,7 @@ def test_map_genotypes_small():
         arg_needle_lib.map_genotype_to_ARG(arg, [1, 1, 1, 1], 4)
 
 
-def x_test_map_genotypes_small_async():
+def test_map_genotypes_small_async():
     """Test that input genotypes are correctly converted to mutations on edges"""
     seed = 130222
     ts = msprime.simulate(sample_size=4, random_seed=seed)

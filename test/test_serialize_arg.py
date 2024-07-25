@@ -250,6 +250,6 @@ def test_validation():
     assert not arg_needle_lib.validate_serialized_arg('valid_hdf5_invalid_arg')
 
     # Tidy up files on disk
-    # pathlib.Path('valid.arg').unlink()
-    # pathlib.Path('valid_file_invalid_hdf5').unlink()
-    # pathlib.Path('valid_hdf5_invalid_arg').unlink()
+    pathlib.Path('valid.arg').unlink()
+    pathlib.Path('valid_file_invalid_hdf5').unlink()
+    pathlib.Path('valid_hdf5_invalid_arg').unlink()

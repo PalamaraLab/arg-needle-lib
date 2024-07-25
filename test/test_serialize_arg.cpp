@@ -91,3 +91,12 @@ TEST_CASE("Deserialize ARG")
 
   CHECK(from_arg_file.num_nodes() == 50);
 }
+
+TEST_CASE("Deserialize ARG with mutations")
+{
+  const std::string valid_arg = ARG_NEEDLE_TESTDATA_DIR "/test_serialize_arg/valid_with_mutations.arg";
+  const ARG from_arg_file = arg_utils::deserialize_arg(valid_arg);
+
+  CHECK(from_arg_file.num_nodes() == 50);
+  CHECK(from_arg_file.num_mutations() == 89);
+}

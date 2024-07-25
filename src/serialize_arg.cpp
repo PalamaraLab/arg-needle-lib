@@ -367,7 +367,7 @@ ARG deserialize_arg_v2(const H5::H5File& h5_file, const int chunk_size, const in
       const auto mut_pos = read_dataset_to_vector_1d<double>(h5_file, "mutations/positions", range_lo, range_hi);
       const auto mut_hts = read_dataset_to_vector_1d<double>(h5_file, "mutations/heights", range_lo, range_hi);
       const auto mut_sid = read_dataset_to_vector_1d<int>(h5_file, "mutations/site_ids", range_lo, range_hi);
-      const auto mut_eid = read_dataset_to_vector_2d<int>(h5_file, "edge_ids", range_lo, range_hi);
+      const auto mut_eid = read_dataset_to_vector_2d<int>(h5_file, "mutations/edge_ids", range_lo, range_hi);
 
       arg.deserialize_add_mutations(mut_pos, mut_hts, mut_sid, mut_eid);
 

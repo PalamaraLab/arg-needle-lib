@@ -53,6 +53,18 @@ bool check_dataset(const H5::H5File& h5_file, const std::string& expected_dset)
   }
 }
 
+bool check_group(const H5::H5File& h5_file, const std::string& expected_group)
+{
+  try {
+    auto group = h5_file.openGroup(expected_group);
+    return true;
+  } catch (const H5::Exception&) {
+    std::cerr << "Expected file " << h5_file.getFileName() << " to include group `" << expected_group << "`"
+              << std::endl;
+    return false;
+  }
+}
+
 bool read_bool_attribute(const H5::H5File& file, const std::string& attrName)
 {
   bool value = false;
@@ -230,8 +242,12 @@ bool validate_serialized_arg_v2(const H5::H5File& h5_file)
   // Expected attributes and datasets
   std::vector<std::string> expected_attrs = {"num_nodes", "num_edges", "node_bounds", "num_mutations", "mutations",
       "offset", "chromosome", "start", "end", "threaded_samples", "datetime_created", "arg_file_version"};
+
   std::vector<std::string> expected_dsets = {"flags", "times", "edge_ranges", "edge_ids"};
-  std::vector<std::string> optional_dsets = {"mutations", "node_bounds"};
+  std::vector<std::string> optional_dsets = {"node_bounds"};
+
+  std::vector<std::string> expected_groups = {};
+  std::vector<std::string> optional_groups = {"mutations"};
 
   bool is_valid = true;
 
@@ -248,6 +264,17 @@ bool validate_serialized_arg_v2(const H5::H5File& h5_file)
 
   for (const auto& dset : expected_dsets) {
     is_valid = check_dataset(h5_file, dset);
+  }
+
+  // The existence of optional groups is also marked by bool attributes of the same name
+  for (const auto& group_name : optional_groups) {
+    if (read_bool_attribute(h5_file, group_name)) {
+      expected_groups.emplace_back(group_name);
+    }
+  }
+
+  for (const auto& group : expected_groups) {
+    is_valid = check_group(h5_file, group);
   }
 
   return is_valid;

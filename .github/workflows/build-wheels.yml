@@ -23,7 +23,7 @@ jobs:
           - os: ubuntu-22.04
             arch: auto64
             py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
-            before-all: dnf -y install boost-devel eigen3-devel
+            before-all: dnf -y install boost-devel hdf5-devel eigen3-devel
             extra-env: ""
           - os: macos-13
             arch: x86_64

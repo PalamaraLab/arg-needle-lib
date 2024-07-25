@@ -26,6 +26,7 @@
 #include "genotype_mapping.hpp"
 #include "mutation.hpp"
 #include "root.hpp"
+#include "serialize_arg.hpp"
 #include "site.hpp"
 #include "types.hpp"
 
@@ -493,4 +494,10 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
           },
           py::return_value_policy::reference, py::arg("arg"), py::arg("descendants"), py::arg("position"),
           "Finds the most recent common ancestor of a set of descendants in an ARG at a specific position.");
+
+    // serialize_arg: ARG serialization to HDF5
+    m.def("validate_serialized_arg", &arg_utils::validate_serialized_arg, py::arg("file_name"),
+        "Validates the integrity of a serialized ARG file.");
+    m.def("deserialize_arg", &arg_utils::deserialize_arg, py::arg("file_name"), py::arg("chunk_size") = 1000,
+        py::arg("reserved_samples") = -1, "Deserialize ARG from HDF5 file.");
 }

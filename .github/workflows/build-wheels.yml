@@ -25,12 +25,8 @@ jobs:
             py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
-              wget https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.4.3/hdf5-1.14.4-3.tar.gz
-              tar zxvf hdf5-1.14.4-3.tar.gz
-              cd hdf5-1.14.4-3
-              ./configure -prefix=/usr --enable-cxx
-              make -j -l8
-              make install
+              dnf -y install epel-release
+              dnf -y install hdf5-devel
             extra-env: ""
           - os: macos-13
             arch: x86_64

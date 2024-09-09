@@ -47,7 +47,6 @@ jobs:
       CIBW_BEFORE_ALL: ${{ matrix.before-all }}
       CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
       CIBW_ENVIRONMENT: ${{ matrix.extra-env }}
-      MACOSX_DEPLOYMENT_TARGET: 10.15
 
     steps:
 

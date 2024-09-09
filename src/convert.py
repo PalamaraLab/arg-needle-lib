@@ -93,7 +93,13 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
 
         node = arg.node(permuted_node_id)
         times.append(node.height)
-        flags.append(tskit.NODE_IS_SAMPLE if arg.is_leaf(permuted_node_id) else ~tskit.NODE_IS_SAMPLE)
+
+        # Note: used to use tskit.NODE_IS_SAMPLE and ~tskit.NODE_IS_SAMPLE, but in tskit this is now an integer.
+        # ~1 is -2, not 0, so this was incorrect. This check just verifies that our assumption about tskit behaviour
+        # remains correct
+        assert tskit.NODE_IS_SAMPLE == 1
+        flags.append(1 if arg.is_leaf(permuted_node_id) else 0)
+
         for edge in node.parent_edges():
             if edge.parent.ID != -1:
                 lefts.append(edge.start)
@@ -103,7 +109,10 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
                 edge_counter += 1
         if batch_size is not None and edge_counter >= batch_size:
             # Append all of the nodes
-            tables.nodes.append_columns(flags=flags, time=times)
+            tables.nodes.append_columns(
+                flags=np.array(flags, dtype=np.uint32),
+                time=np.array(times, dtype=np.float64),
+            )
             tables.edges.append_columns(left=lefts, right=rights, parent=parents, child=children)
             # Reset the node info lists
             flags = []
@@ -116,7 +125,10 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
             # Reset the counter
             edge_counter = 0
     # Append any residual columns
-    tables.nodes.append_columns(flags=flags, time=times)
+    tables.nodes.append_columns(
+        flags=np.array(flags, dtype=np.uint32),
+        time=np.array(times, dtype=np.float64),
+    )
     tables.edges.append_columns(left=lefts, right=rights, parent=parents, child=children)
     if mutations:
         for m in arg.mutations():

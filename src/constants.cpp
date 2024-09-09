@@ -1,5 +1,5 @@
 /*
-  This file is part of the ARG-Needle genealogical inference and
+This file is part of the ARG-Needle genealogical inference and
   analysis software suite.
   Copyright (C) 2023 ARG-Needle Developers.
 
@@ -17,13 +17,17 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef ARG_NEEDLE_LIB_TYPES_H
-#define ARG_NEEDLE_LIB_TYPES_H
+#include "constants.hpp"
 
-#include <Eigen/Dense>
+#include <thread>
 
-using arg_real_t = double;
+unsigned anl::get_default_concurrency() {
 
-using MatXui = Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic>;
+  static const unsigned default_concurrency = [] {
+    // Compute the runtime constant. This lambda is executed only once.
+    unsigned result = std::thread::hardware_concurrency();
+    return result == 0u ? anl::default_max_tasks : result;
+  }();
 
-#endif // ARG_NEEDLE_LIB_TYPES_H
+  return default_concurrency;
+}

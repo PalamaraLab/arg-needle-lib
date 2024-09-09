@@ -15,22 +15,38 @@ jobs:
   build_wheels_cloud:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+    if: github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-13]
+        include:
+          - os: ubuntu-22.04
+            arch: auto64
+            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            before-all: |
+              dnf -y install boost-devel eigen3-devel wget
+              dnf -y install epel-release
+              dnf -y install hdf5-devel
+            extra-env: ""
+          - os: macos-13
+            arch: x86_64
+            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            before-all: brew install cmake boost eigen hdf5
+            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+#          - os: macos-14
+#            arch: arm64
+#            py-vers: cp39-* cp310-* cp311-* cp312-*
+#            before-all: brew install cmake boost eigen hdf5
+#            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
 
     env:
-      CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
+      CIBW_BUILD: ${{ matrix.py-vers }}
       CIBW_SKIP: cp3*-musllinux_*
-      CIBW_ARCHS_MACOS: x86_64
-      CIBW_ARCHS_LINUX: auto64
-      CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-      CIBW_BEFORE_ALL_LINUX: yum -y install boost-devel eigen3-devel
-      CIBW_BEFORE_ALL_MACOS: brew install boost eigen llvm@17
+      CIBW_ARCHS: ${{ matrix.arch }}
+      CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+      CIBW_BEFORE_ALL: ${{ matrix.before-all }}
       CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
-      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
+      CIBW_ENVIRONMENT: ${{ matrix.extra-env }}
       MACOSX_DEPLOYMENT_TARGET: 10.15
 
     steps:
@@ -41,14 +57,8 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v3
-
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.16.1
-
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
+        uses: pypa/cibuildwheel@v2.17.0
 
       - uses: actions/upload-artifact@v3
         with:
@@ -64,7 +74,7 @@ jobs:
     env:
       CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
       CIBW_ARCHS_MACOS: arm64
-      CIBW_BEFORE_ALL_MACOS: brew install boost eigen llvm@17
+      CIBW_BEFORE_ALL_MACOS: brew install boost eigen hdf5 llvm@17
       CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
       CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
       MACOSX_DEPLOYMENT_TARGET: 10.15

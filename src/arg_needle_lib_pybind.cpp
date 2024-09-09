@@ -23,8 +23,10 @@
 #include "arg_utils.hpp"
 #include "descendant_list.hpp"
 #include "deserialization_params.hpp"
+#include "genotype_mapping.hpp"
 #include "mutation.hpp"
 #include "root.hpp"
+#include "serialize_arg.hpp"
 #include "site.hpp"
 #include "types.hpp"
 
@@ -189,7 +191,7 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def("num_nodes", &ARG::num_nodes)
       .def("num_edges", &ARG::num_edges)
       .def("num_mutations", &ARG::num_mutations)
-      .def("num_sites", &ARG::num_sites)
+      .def("get_num_sites", &ARG::get_num_sites)
       .def(
           "num_samples", [](const ARG& arg) { return arg.leaf_ids.size(); },
           "Return number of samples")
@@ -197,13 +199,10 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def_readonly("sample_names", &ARG::sample_names) // unsorted
       .def("set_offset", &ARG::set_offset, py::arg("offset"))
       .def("set_chromosome", &ARG::set_chromosome, py::arg("chromosome"))
-      .def("set_sites", &ARG::set_sites, py::arg("positions"))
-      .def("get_site", &ARG::get_site, py::arg("site_id"))
-      // A sorted list of physical positions
-      .def("get_sites", &ARG::get_sites, py::return_value_policy::reference)
       // A map from each physical position (key) to a site object containing all mutations at that position (value)
       .def("get_mutation_sites", &ARG::get_mutation_sites, py::return_value_policy::reference)
-      .def("get_id_of_closest_site", &ARG::get_id_of_closest_site, py::arg("position"))
+      // A sorted list of physical positions
+      .def("get_site_positions", &ARG::get_site_positions, py::return_value_policy::reference)
       .def("add_sample", &ARG::add_sample, py::arg("sample_name") = "")
       .def("is_leaf", &ARG::is_leaf, py::arg("node_id"))
       .def("thread_sample", &ARG::thread_sample, py::arg("section_starts"), py::arg("sample_ids"),
@@ -232,6 +231,8 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
            py::arg("is_sample"), py::arg("node_bounds") = std::vector<std::vector<arg_real_t>>{})
       .def("deserialize_add_edges", &ARG::deserialize_add_edges)
       .def("deserialize_add_mutations", &ARG::deserialize_add_mutations)
+      .def("add_mutation", &ARG::add_mutation, py::arg("edge"), py::arg("position"), py::arg("height") = -1.0,
+          py::arg("site_id") = -1, py::arg("update_data_structures") = false)
       .def("get_idx_of_first_mutation_left_of", &ARG::get_idx_of_first_mutation_left_of,
            py::arg("physical_pos"), py::arg("include_equal") = false,
            py::arg("warn_out_of_range") = true)
@@ -239,7 +240,9 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
            py::arg("physical_pos"), py::arg("include_equal") = false,
            py::arg("warn_out_of_range") = true)
       .def("get_idx_of_mutation_closest_to", &ARG::get_idx_of_mutation_closest_to,
-           py::arg("physical_pos"));
+           py::arg("physical_pos"))
+      .def("clear_mutations", &ARG::clear_mutations)
+      .def("clear_mutations_from_edges", &ARG::clear_mutations_from_edges);
 
   py::class_<DescendantList>(m, "DescendantList")
       .def_static(
@@ -256,8 +259,8 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
   m.def("num_lineages", &arg_utils::num_lineages, py::arg("arg"), py::arg("position"),
         py::arg("height"), "Count the number of lineages at a given position and height");
   m.def("total_volume", &arg_utils::total_volume, py::arg("arg"), "Get ARG volume");
-  m.def("local_volume", &arg_utils::local_volume, py::arg("arg"), py::arg("min_position"),
-        py::arg("max_position"), "Get the local arg volume");
+  m.def("local_volume", &arg_utils::local_volume, py::arg("arg"), py::arg("min_pos") = std::nullopt,
+        py::arg("max_pos") = std::nullopt, py::arg("num_tasks") = std::nullopt, "Get the local arg volume");
   // arg_utils: association
   m.def("association_diploid_all", &arg_utils::association_diploid_all, py::arg("arg"),
         py::arg("phenotype"), py::arg("use_sample"), py::arg("file_root"),
@@ -460,4 +463,41 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
         "Check for identical ARG visit output between slow and fast versions");
   m.def("time_efficient_visit", &arg_utils::time_efficient_visit, py::arg("arg"),
         py::arg("timing") = false, "Time efficient visit routine");
+
+    // Functions for genotype mapping
+    m.def("map_genotype_to_ARG", &arg_utils::map_genotype_to_ARG, py::arg("arg"),
+          py::arg("genotype"), py::arg("pos"), "Maps a genotype to an ARG");
+    m.def("map_genotypes_to_ARG", &arg_utils::map_genotypes_to_ARG, py::arg("arg"),
+          py::arg("genotypes"), py::arg("positions"), py::arg("num_tasks") = std::nullopt, "Maps many genotype to an ARG");
+    m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"),
+          py::arg("genotype"), py::arg("site_id"), "Maps a diploid genotype to an ARG");
+    m.def("map_genotype_to_ARG_approximate",
+          [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos) {
+              auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos);
+              std::vector<ARGEdge> edges;
+              for (const auto edge: std::get<0>(result)) {
+                  edges.push_back(*edge);
+              }
+              return py::make_tuple(edges, std::get<1>(result));
+          }, py::arg("arg"), py::arg("genotype"), py::arg("pos"),
+          "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
+    m.def("most_recent_common_ancestor",
+          [](ARG &arg, std::vector<int> descendants, double position) {
+              if (descendants.empty()) {
+                  throw std::runtime_error(THROW_LINE("Descendants list cannot be empty"));
+              }
+              DescendantList desc(arg.leaf_ids.size(), descendants.at(0));
+              for (int i = 1; i < descendants.size(); i++) {
+                  desc.set(descendants.at(i), true);
+              }
+              return arg_utils::most_recent_common_ancestor(arg, desc, position);
+          },
+          py::return_value_policy::reference, py::arg("arg"), py::arg("descendants"), py::arg("position"),
+          "Finds the most recent common ancestor of a set of descendants in an ARG at a specific position.");
+
+    // serialize_arg: ARG serialization to HDF5
+    m.def("validate_serialized_arg", &arg_utils::validate_serialized_arg, py::arg("file_name"),
+        "Validates the integrity of a serialized ARG file.");
+    m.def("deserialize_arg", &arg_utils::deserialize_arg, py::arg("file_name"), py::arg("chunk_size") = 1000,
+        py::arg("reserved_samples") = -1, "Deserialize ARG from HDF5 file.");
 }

@@ -24,7 +24,7 @@ jobs:
 
       - name: install system packages
         run: |
-          brew install boost eigen
+          brew install boost eigen hdf5
 
       - name: make build directory
         run: mkdir build_dir

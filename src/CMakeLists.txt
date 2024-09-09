@@ -21,6 +21,12 @@ find_package(Boost COMPONENTS iostreams REQUIRED)
 # Find Eigen
 find_package(Eigen3 CONFIG REQUIRED)
 
+# Find the appropriate system threads library
+find_package(Threads REQUIRED)
+
+# Find HDF5
+find_package(HDF5 COMPONENTS CXX REQUIRED)
+
 set(
         arg_needle_lib_src
         ancestor_entry.cpp
@@ -28,11 +34,14 @@ set(
         arg_edge.cpp
         arg_node.cpp
         arg_utils.cpp
+        constants.cpp
         descendant_list.cpp
         file_utils.cpp
+        genotype_mapping.cpp
         mutation.cpp
         random_utils.cpp
         root.cpp
+        serialize_arg.cpp
         site.cpp
         utils.cpp
 )
@@ -44,17 +53,20 @@ set(
         arg_edge.hpp
         arg_node.hpp
         arg_utils.hpp
+        constants.hpp
         descendant_list.hpp
         deserialization_params.hpp
         file_utils.hpp
+        genotype_mapping.hpp
         mutation.hpp
         IntervalTree.h
         random_utils.hpp
         root.hpp
+        serialize_arg.hpp
         site.hpp
         types.hpp
         utils.hpp
-)
+        arg_traversal.hpp)
 
 add_library(arg_needle_lib STATIC ${arg_needle_lib_src} ${arg_needle_lib_hdr})
 
@@ -67,7 +79,7 @@ target_include_directories(
 set_target_properties(arg_needle_lib PROPERTIES PUBLIC_HEADER "${arg_needle_lib_hdr}")
 
 
-target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams)
+target_link_libraries(arg_needle_lib PRIVATE Boost::headers Boost::iostreams Threads::Threads HDF5::HDF5)
 target_link_libraries(arg_needle_lib PUBLIC Eigen3::Eigen)
 
 # Turning off warnings for now

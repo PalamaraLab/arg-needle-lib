@@ -16,17 +16,15 @@ jobs:
     if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
     strategy:
       matrix:
-        python-version: ['3.7', '3.10']
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
 
     steps:
 
       - name: checkout repo & submodules
-        uses: actions/checkout@v2
-        with:
-          submodules: true
+        uses: actions/checkout@v4
       
       - name: set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -36,7 +34,7 @@ jobs:
       - name: install system packages
         run: |
           sudo apt -y update
-          sudo apt -y install libboost-dev libboost-math-dev libboost-iostreams-dev libeigen3-dev
+          sudo apt -y install libboost-dev libboost-math-dev libboost-iostreams-dev libeigen3-dev libhdf5-dev
 
       - name: install python dependencies
         run: |

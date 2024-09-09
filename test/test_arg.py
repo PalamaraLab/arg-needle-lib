@@ -89,45 +89,22 @@ def test_lowest_mutated_edge():
     assert arg.lowest_mutated_edge(1, 0.5320).child.ID == 1
     assert arg.lowest_mutated_edge(3, 0.5320) is None
 
-def test_set_and_get_sites():
+def test_sites_functionality():
     """Test that sites are properly set"""
     # Generate an ARG with 4 leaves [0, 1]
     seed = 130222
     ts = msprime.simulate(sample_size=4, random_seed=seed)
     arg = arg_needle_lib.tskit_to_arg(ts)
 
-    # Set sites
-    arg.set_sites([0.1, 0.5, 0.6])
-    assert arg.num_sites() == 3
+    arg.add_mutation(None, 0.1)
+    arg.add_mutation(None, 0.5)
+    arg.add_mutation(None, 0.6)
 
-    # Overwrite sites
-    arg.set_sites([0.1, 0.5, 0.6, 0.9])
-    assert arg.num_sites() == 4
+    mutation_sites = arg.get_mutation_sites()
+    site_positions = arg.get_site_positions()
 
-    # Test getter
-    assert arg.get_site(0) == 0.1
-    assert arg.get_site(3) == 0.9
-    with pytest.raises(Exception):
-        arg.get_site(4)
+    assert len(mutation_sites) == len(site_positions)
 
-    # Get the closest site ID for various positions
-    query_positions = [0, 0.4, 0.51, 0.7, 0.95]
-    closest_site_ids = [0, 1, 1, 2, 3]
-    results = []
-    for position in query_positions:
-        results.append(arg.get_id_of_closest_site(position))
-    assert results == closest_site_ids
-
-    with pytest.raises(Exception):
-        arg.get_id_of_closest_site(-0.5)
-
-    # Try to set unsorted sites
-    with pytest.raises(Exception):
-        arg.set_sites([0.5, 0.1, 0.6, 0.9])
-
-    # Try to set out-of-bounds sites
-    with pytest.raises(Exception):
-        arg.set_sites([0.1, 0.5, 1.1])
 
 
 def test_finding_mutations():

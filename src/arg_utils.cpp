@@ -31,6 +31,7 @@ from the root of this repository.
 #include "arg.hpp"
 #include "arg_edge.hpp"
 #include "arg_node.hpp"
+#include "constants.hpp"
 #include "descendant_list.hpp"
 #include "deserialization_params.hpp"
 #include "file_utils.hpp"
@@ -42,6 +43,7 @@ from the root of this repository.
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <future>
 #include <functional>
 #include <iostream>
 #include <list>
@@ -50,6 +52,7 @@ from the root of this repository.
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <typeinfo>
 #include <unordered_map>
@@ -76,6 +79,38 @@ using Clock = std::chrono::high_resolution_clock;
 using boost::dynamic_bitset;
 
 namespace arg_utils {
+
+unsigned validate_parallel_tasks(const unsigned num_tasks) {
+    unsigned recommended_max = anl::get_default_concurrency();
+
+    if (num_tasks == 0u) {
+        std::cerr << "Warning: can't set num_tasks to 0: setting to 1\n";
+        return 1u;
+    }
+
+    if (num_tasks > recommended_max) {
+        std::cerr << "Warning: recommended max num_tasks is " << recommended_max
+                  << ": you are using requesting " << num_tasks << '\n';
+    }
+
+    return num_tasks;
+}
+
+arg_real_t local_volume_single(const ARG &arg, arg_real_t min_pos, arg_real_t max_pos) {
+    arg_real_t volume = 0;
+    arg_utils::visit_branches(
+            arg,
+            [&volume](const DescendantList &desc_list, const DescendantList &_ignored,
+                      const ARGNode *parent, const ARGNode *child, arg_real_t start, arg_real_t end) {
+                (void) desc_list;
+                (void) _ignored;
+                arg_real_t branch_volume = (parent->height - child->height) * (end - start);
+                volume += branch_volume;
+            },
+            min_pos, max_pos);
+    return volume;
+}
+
 
 // Compute the number of lineages at a position at a certain height
 //
@@ -133,9 +168,9 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
     throw std::logic_error(THROW_LINE("trim start is after trim end"));
   }
   vector<int> node_is_in_range(arg.num_nodes(), 0);
-  vector<vector<int>> edge_ids;
+  vector<std::array<int, 2>> edge_ids;
   edge_ids.reserve(arg.num_edges());
-  vector<vector<arg_real_t>> edge_ranges;
+  vector<std::array<double, 2>> edge_ranges;
   edge_ranges.reserve(arg.num_edges());
 
   for (auto const& map_entry : arg.arg_nodes) {
@@ -146,8 +181,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
         auto edge = node_map_entry.second.get();
         // a node is in range iff it has in range edges
         if (edge->start < trim_end && edge->end > trim_start) {
-          vector<int> edge_id{edge->child->ID, edge->parent->ID};
-          vector<arg_real_t> edge_range{std::max(edge->start - trim_start, arg_real_t(0)),
+          std::array<int, 2> edge_id{edge->child->ID, edge->parent->ID};
+          std::array<double, 2> edge_range{std::max(edge->start - trim_start, arg_real_t(0)),
                                         std::min(edge->end, trim_end) - trim_start};
           node_is_in_range[edge->child->ID] = 1;
           node_is_in_range[edge->parent->ID] = 1;
@@ -172,14 +207,14 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
   for (auto& elem : edge_ids) {
     int new_child_id = reassigned_node_id[elem[0]];
     int new_parent_id = reassigned_node_id[elem[1]];
-    vector<int> new_ids{new_child_id, new_parent_id};
+    std::array<int, 2> new_ids{new_child_id, new_parent_id};
     elem = new_ids;
   }
 
   // assemble all ARG data for the deserialisation constructor
-  vector<arg_real_t> node_heights(num_nodes_in_range, 0);
-  vector<vector<arg_real_t>> node_bounds(num_nodes_in_range);
-  vector<bool> is_sample(num_nodes_in_range, false);
+  vector<double> node_heights(num_nodes_in_range, 0);
+  vector<std::array<double, 2>> node_bounds(num_nodes_in_range);
+  vector<uint8_t> is_sample(num_nodes_in_range, false);
 
   for (int old_node_id = 0; old_node_id < node_is_in_range.size(); old_node_id++) {
     auto node = arg.arg_nodes.at(old_node_id).get();
@@ -187,8 +222,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
       int new_node_id = reassigned_node_id[node->ID];
       is_sample[new_node_id] = arg.is_leaf(old_node_id);
       node_heights[new_node_id] = node->height;
-      vector<arg_real_t> current_node_bound{std::max(node->start - trim_start, arg_real_t(0)),
-                                            std::min(node->end, trim_end) - trim_start};
+      std::array<double, 2> current_node_bound{
+          std::max(node->start - trim_start, arg_real_t(0)), std::min(node->end, trim_end) - trim_start};
       node_bounds[new_node_id] = current_node_bound;
     }
   }
@@ -214,11 +249,11 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
   if (arg.num_mutations() > 0) {
     int num_sites_in_range = 0;
     vector<arg_real_t> positions;
-    positions.reserve(arg.num_sites());
+    positions.reserve(arg.get_num_sites());
     vector<arg_real_t> heights;
-    heights.reserve(arg.num_sites());
-    vector<vector<int>> mutation_edge_ids;
-    mutation_edge_ids.reserve(arg.num_sites());
+    heights.reserve(arg.get_num_sites());
+    vector<std::array<int, 2>> mutation_edge_ids;
+    mutation_edge_ids.reserve(arg.get_num_sites());
 
     for (auto const& entry : arg.get_mutations()) {
       auto mutation = entry.get();
@@ -226,8 +261,8 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
         num_sites_in_range++;
         positions.emplace_back(mutation->position - trim_start);
         heights.emplace_back(mutation->height);
-        vector<int> mutation_edge_id{reassigned_node_id[mutation->edge->child->ID],
-                                     reassigned_node_id[mutation->edge->parent->ID]};
+        std::array<int, 2> mutation_edge_id{
+            reassigned_node_id[mutation->edge->child->ID], reassigned_node_id[mutation->edge->parent->ID]};
         mutation_edge_ids.emplace_back(mutation_edge_id);
       }
     }
@@ -235,7 +270,6 @@ ARG trim_arg(ARG& arg, arg_real_t trim_start, arg_real_t trim_end) {
     // fill site_ids as default
     std::iota(site_ids.begin(), site_ids.end(), 0);
     trimmed_arg.deserialize_add_mutations(positions, heights, site_ids, mutation_edge_ids);
-    trimmed_arg.set_sites(positions);
   }
   return trimmed_arg;
 }
@@ -403,23 +437,32 @@ arg_real_t total_volume(const ARG& arg) {
   return volume;
 }
 
-// computes the local volume of an ARG between min and max position
-// NOTE: if the max_position - min_position is really large then
-// this may result in a drop in performance relative to total_volume.
-// The intended use case for this function is for testing the visit_branches function
-arg_real_t local_volume(const ARG& arg, arg_real_t min_position, arg_real_t max_position) {
-  arg_real_t volume = 0;
-  arg_utils::visit_branches(
-      arg,
-      [&volume](const DescendantList& desc_list, const DescendantList& _ignored,
-                const ARGNode* parent, const ARGNode* child, arg_real_t start, arg_real_t end) {
-        (void) desc_list;
-        (void) _ignored;
-        arg_real_t branch_volume = (parent->height - child->height) * (end - start);
-        volume += branch_volume;
-      },
-      min_position, max_position);
-  return volume;
+arg_real_t local_volume(const ARG &arg, std::optional<arg_real_t> min_pos, std::optional<arg_real_t> max_pos,
+                        std::optional<unsigned> num_tasks) {
+
+    const unsigned valid_num_tasks = validate_parallel_tasks(num_tasks.value_or(anl::get_default_concurrency()));
+    const arg_real_t valid_min_pos = min_pos.value_or(arg.start);
+    const arg_real_t valid_max_pos = max_pos.value_or(arg.end);
+
+    if (valid_num_tasks == 1u) {
+        return local_volume_single(arg, valid_min_pos, valid_max_pos);
+    }
+
+    std::vector<std::future<arg_real_t>> results;
+    const arg_real_t step_size = (valid_max_pos - valid_min_pos) / valid_num_tasks;
+
+    for (unsigned i = 0; i < valid_num_tasks; ++i) {
+        const arg_real_t lo = valid_min_pos + i * step_size;
+        const arg_real_t hi = valid_min_pos + (i + 1u) * step_size;
+        results.push_back(std::async(std::launch::async, local_volume_single, std::cref(arg), lo, hi));
+    }
+
+    arg_real_t res = 0.0;
+    for (auto &fut: results) {
+        res += fut.get();
+    }
+
+    return res;
 }
 
 // result[i] is the total volume of branches that have i descendants
@@ -623,8 +666,9 @@ void generate_mutations(ARG& arg, arg_real_t mu, unsigned random_seed, std::size
   arg.reserve_n_mutations(new_mutations.size());
   std::sort(new_mutations.begin(), new_mutations.end());
   for (const auto& mut : new_mutations) {
-    arg.add_mutation(mut.edge, mut.position, mut.height);
+    arg.add_mutation(mut.edge, mut.position, mut.height, -1, false);
   }
+  arg.update_site_data_structures();
 }
 
 // Generate exactly M mutations with the following steps:
@@ -694,8 +738,9 @@ void generate_m_mutations(ARG& arg, int m, unsigned random_seed) {
   arg.reserve_n_mutations(new_mutations.size());
   std::sort(new_mutations.begin(), new_mutations.end());
   for (const auto& mut : new_mutations) {
-    arg.add_mutation(mut.edge, mut.position, mut.height);
+    arg.add_mutation(mut.edge, mut.position, mut.height, -1, false);
   }
+  arg.update_site_data_structures();
 
   // Check that we have exactly m mutations!
   assert(arg.num_mutations() == m);

@@ -26,7 +26,6 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip setuptools wheel
-pip install cmake ninja
 pip install .
 ```
 

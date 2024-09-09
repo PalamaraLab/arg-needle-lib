@@ -39,7 +39,6 @@ jobs:
       - name: install python dependencies
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install cmake ninja
 
       - name: install arg_needle_lib with dev dependencies
         run: |

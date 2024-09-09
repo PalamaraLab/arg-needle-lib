@@ -20,7 +20,7 @@ jobs:
 
     steps:
 
-      - name: checkout repo & submodules
+      - name: checkout repo
         uses: actions/checkout@v4
       
       - name: set up Python

@@ -22,7 +22,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             arch: auto64
-            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
               dnf -y install epel-release
@@ -30,7 +30,7 @@ jobs:
             extra-env: ""
           - os: macos-13
             arch: x86_64
-            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-*
             before-all: brew install cmake boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           - os: macos-14

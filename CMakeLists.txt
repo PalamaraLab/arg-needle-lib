@@ -87,9 +87,9 @@ else ()
 endif ()
 
 # Python testing targets
-find_package (Python3 3.7 COMPONENTS Interpreter)
+find_package (Python3 3.9 COMPONENTS Interpreter)
 if (NOT Python3_Interpreter_FOUND)
-    message(STATUS "Python 3.7+ interpreter not found.")
+    message(STATUS "Python 3.9+ interpreter not found.")
 else ()
     message(STATUS "Python ${Python3_VERSION} interpreter found: ${Python3_EXECUTABLE}")
     set (BIG_PYTHON_TEST ${CMAKE_SOURCE_DIR}/test/test_big_args.py)

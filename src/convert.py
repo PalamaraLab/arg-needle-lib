@@ -22,6 +22,8 @@ import tskit
 
 import arg_needle_lib
 
+from .constants import ANL_NODE_IS_SAMPLE, ANL_NODE_IS_NOT_SAMPLE
+
 __all__ = [
     "arg_to_tskit",
     "tskit_to_arg_thread",
@@ -93,7 +95,9 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
 
         node = arg.node(permuted_node_id)
         times.append(node.height)
-        flags.append(tskit.NODE_IS_SAMPLE if arg.is_leaf(permuted_node_id) else ~tskit.NODE_IS_SAMPLE)
+
+        flags.append(ANL_NODE_IS_SAMPLE if arg.is_leaf(permuted_node_id) else ANL_NODE_IS_NOT_SAMPLE)
+
         for edge in node.parent_edges():
             if edge.parent.ID != -1:
                 lefts.append(edge.start)
@@ -103,7 +107,10 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
                 edge_counter += 1
         if batch_size is not None and edge_counter >= batch_size:
             # Append all of the nodes
-            tables.nodes.append_columns(flags=flags, time=times)
+            tables.nodes.append_columns(
+                flags=np.array(flags, dtype=np.uint32),
+                time=np.array(times, dtype=np.float64),
+            )
             tables.edges.append_columns(left=lefts, right=rights, parent=parents, child=children)
             # Reset the node info lists
             flags = []
@@ -116,7 +123,10 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
             # Reset the counter
             edge_counter = 0
     # Append any residual columns
-    tables.nodes.append_columns(flags=flags, time=times)
+    tables.nodes.append_columns(
+        flags=np.array(flags, dtype=np.uint32),
+        time=np.array(times, dtype=np.float64),
+    )
     tables.edges.append_columns(left=lefts, right=rights, parent=parents, child=children)
     if mutations:
         for m in arg.mutations():

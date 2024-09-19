@@ -22,22 +22,25 @@ jobs:
         include:
           - os: ubuntu-22.04
             arch: auto64
-            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
               dnf -y install epel-release
               dnf -y install hdf5-devel
             extra-env: ""
+            mdt: ""
           - os: macos-13
             arch: x86_64
-            py-vers: cp38-* cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-*
             before-all: brew install cmake boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-#          - os: macos-14
-#            arch: arm64
-#            py-vers: cp39-* cp310-* cp311-* cp312-*
-#            before-all: brew install cmake boost eigen hdf5
-#            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+            mdt: 13
+          - os: macos-14
+            arch: arm64
+            py-vers: cp39-* cp310-* cp311-* cp312-*
+            before-all: brew install cmake boost eigen hdf5
+            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+            mdt: 14
 
     env:
       CIBW_BUILD: ${{ matrix.py-vers }}
@@ -47,83 +50,39 @@ jobs:
       CIBW_BEFORE_ALL: ${{ matrix.before-all }}
       CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
       CIBW_ENVIRONMENT: ${{ matrix.extra-env }}
-      MACOSX_DEPLOYMENT_TARGET: 10.15
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.mdt }}
 
     steps:
 
       - name: checkout repo & submodules
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: true
           fetch-depth: 0
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.19.2
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-cloud
-          path: ./wheelhouse/*.whl
-          retention-days: 1
-
-  build_wheels_self_hosted:
-    name: Build wheels on self-hosted-macos-arm64-hemlock
-    runs-on: self-hosted-macos-arm64-hemlock
-    if: ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
-
-    env:
-      CIBW_BUILD: cp39-* cp310-* cp311-* cp312-*
-      CIBW_ARCHS_MACOS: arm64
-      CIBW_BEFORE_ALL_MACOS: brew install boost eigen hdf5 llvm@17
-      CIBW_BEFORE_BUILD: pip install --upgrade pip setuptools wheel ninja numpy cython
-      CIBW_ENVIRONMENT_MACOS: CXX="$(brew --prefix llvm@17)/bin/clang++"
-      MACOSX_DEPLOYMENT_TARGET: 10.15
-
-    steps:
-
-      - name: checkout repo & submodules
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v3
-
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel==2.16.1
-
-      - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: wheels-self-hosted
+          name: wheels-cloud-${{ matrix.os }}
           path: ./wheelhouse/*.whl
           retention-days: 1
 
   upload_all:
     name: Upload to PyPI
-    needs: [build_wheels_cloud, build_wheels_self_hosted]
+    needs: [build_wheels_cloud]
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'release' && github.event.action == 'published' && github.repository == 'PalamaraLab/arg-needle-lib' }}
 
     steps:
-      - uses: actions/setup-python@v3
-
       - name: Download wheels from cloud runners
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: wheels-cloud
+          pattern: wheels-cloud-*
+          merge-multiple: true
           path: wheels
 
-      - name: Download wheels from self-hosted runner
-        uses: actions/download-artifact@v3
-        with:
-          name: wheels-self-hosted
-          path: wheels
-
-      - uses: pypa/gh-action-pypi-publish@v1.6.4
+      - uses: pypa/gh-action-pypi-publish@v1.10.1
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}

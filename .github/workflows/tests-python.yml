@@ -16,11 +16,11 @@ jobs:
     if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12']
 
     steps:
 
-      - name: checkout repo & submodules
+      - name: checkout repo
         uses: actions/checkout@v4
       
       - name: set up Python
@@ -39,7 +39,6 @@ jobs:
       - name: install python dependencies
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install cmake ninja
 
       - name: install arg_needle_lib with dev dependencies
         run: |

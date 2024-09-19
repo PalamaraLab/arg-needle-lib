@@ -22,6 +22,8 @@ import tskit
 
 import arg_needle_lib
 
+from .constants import ANL_NODE_IS_SAMPLE, ANL_NODE_IS_NOT_SAMPLE
+
 __all__ = [
     "arg_to_tskit",
     "tskit_to_arg_thread",
@@ -94,11 +96,7 @@ def arg_to_tskit(arg, batch_size=None, mutations=True, sample_permutation=None):
         node = arg.node(permuted_node_id)
         times.append(node.height)
 
-        # Note: used to use tskit.NODE_IS_SAMPLE and ~tskit.NODE_IS_SAMPLE, but in tskit this is now an integer.
-        # ~1 is -2, not 0, so this was incorrect. This check just verifies that our assumption about tskit behaviour
-        # remains correct
-        assert tskit.NODE_IS_SAMPLE == 1
-        flags.append(1 if arg.is_leaf(permuted_node_id) else 0)
+        flags.append(ANL_NODE_IS_SAMPLE if arg.is_leaf(permuted_node_id) else ANL_NODE_IS_NOT_SAMPLE)
 
         for edge in node.parent_edges():
             if edge.parent.ID != -1:

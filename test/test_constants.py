@@ -15,9 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from arg_needle_lib_pybind import *  # pybind11 bindings
-from .grm import *
-from .metrics import *
-from .serialize_arg import *
-from .convert import *
-from .constants import *
+
+from arg_needle_lib import ANL_NODE_IS_SAMPLE, ANL_NODE_IS_NOT_SAMPLE
+
+def test_constant_values_and_types():
+
+    assert isinstance(ANL_NODE_IS_SAMPLE, int)
+    assert isinstance(ANL_NODE_IS_NOT_SAMPLE, int)
+
+    assert ANL_NODE_IS_SAMPLE == 1
+    assert ANL_NODE_IS_NOT_SAMPLE == 0

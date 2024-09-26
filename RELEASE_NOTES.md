@@ -1,6 +1,6 @@
 # arg-needle-lib Release Notes
 
-## v1.1.0 (2024-09-19)
+## v1.1.0 (2024-09-26)
 
 ### Major changes
 

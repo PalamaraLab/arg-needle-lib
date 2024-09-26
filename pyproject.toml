@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 dynamic = ["readme"]
 name = "arg-needle-lib"
-version = "1.0.2"
+version = "1.1.0"
 description = "Ancestral recombination graph (ARG) data structure and operations"
 readme-content-type = "text/markdown"
 authors = [

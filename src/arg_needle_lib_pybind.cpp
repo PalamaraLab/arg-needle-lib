@@ -82,6 +82,16 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
             return starts;
           },
           "Returns a sorted list of parent starts")
+      .def(
+          "child_edges_at",
+          [](ARGNode& node, arg_real_t position) {
+            std::vector<ARGEdge> edges;
+            for (auto edge : node.children_at(position)) {
+              edges.push_back(*edge);
+            }
+            return edges;
+          },
+          py::arg("position"))
       .def("__repr__", [](const ARGNode& node) {
         std::ostringstream oss;
         oss << node;

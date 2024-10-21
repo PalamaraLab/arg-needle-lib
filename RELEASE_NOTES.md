@@ -1,5 +1,11 @@
 # arg-needle-lib Release Notes
 
+## v1.1.1 (2024-10-21)
+
+### Other changes
+
+- Added `child_edges_at` method to ARGNode API, for parity for existing methods like `parent_edge_at`
+
 ## v1.1.0 (2024-09-26)
 
 ### Major changes

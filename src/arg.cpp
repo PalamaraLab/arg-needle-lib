@@ -297,7 +297,7 @@ void ARG::deserialize_add_mutations(const std::vector<arg_real_t>& positions,
 
     const bool valid_id = edge_ptr->parent->ID == parent->ID;
     const bool valid_pos = edge_ptr->start <= this_pos && edge_ptr->end > this_pos;
-    const bool valid_height = child->height <= this_height && parent->height > this_height;
+    const bool valid_height = this_height == -1.0 || (child->height <= this_height && parent->height > this_height);
 
     if (!valid_id || !valid_pos || !valid_height) {
       throw std::logic_error(THROW_LINE("Could not find correct edge for serialized mutation."));

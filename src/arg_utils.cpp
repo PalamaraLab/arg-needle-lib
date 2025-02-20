@@ -790,7 +790,7 @@ MatXui get_mutations_matrix(const ARG& arg, arg_real_t from_pos, arg_real_t to_p
         // also setting min_time = 0, max_time = std::numeric_limits<double>::infinity()
         // to access last two optional parameters
       },
-      0, std::numeric_limits<double>::infinity(), index_start, index_end);
+      -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), index_start, index_end);
   return mat;
 }
 

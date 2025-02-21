@@ -19,7 +19,7 @@ cmake_minimum_required(VERSION 3.16)
 message(STATUS "Using CMake version ${CMAKE_VERSION}")
 cmake_policy(VERSION 3.16)
 
-project(arg_needle_lib LANGUAGES CXX VERSION 1.1.1)
+project(arg_needle_lib LANGUAGES CXX VERSION 1.1.2)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

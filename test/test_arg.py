@@ -147,3 +147,15 @@ def test_mutation_sites():
 
     for key, val in mutation_sites.items():
         assert key == val.get_mutations()[0].position
+
+
+def test_mutation():
+    """Test mutation object"""
+    arg = arg_needle_lib.tskit_to_arg(msprime.simulate(sample_size=40))
+    arg_needle_lib.generate_m_mutations(arg, 5)
+
+
+    for mutation in arg.mutations():
+        hi = mutation.edge.parent.height
+        lo = mutation.edge.child.height
+        assert mutation.get_midpoint_height() == pytest.approx(lo + (hi - lo) / 2.0)

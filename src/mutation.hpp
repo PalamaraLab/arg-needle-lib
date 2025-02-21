@@ -32,12 +32,12 @@ public:
   /**
    * @brief The position of the mutation.
    */
-  double position;
+  arg_real_t position;
 
   /**
    * @brief The height of the mutation.
    */
-  double height;
+  arg_real_t height;
 
   /**
    * @brief The ARGEdge associated with the mutation.
@@ -56,7 +56,7 @@ public:
    * @param _height Height of the mutation, default value is -1.0.
    * @param _site_id Site id of the mutation, default value is -1.
    */
-  Mutation(ARGEdge* _edge, double _position, double _height = -1.0, int _site_id = -1);
+  Mutation(ARGEdge* _edge, arg_real_t _position, arg_real_t _height = -1.0, int _site_id = -1);
 
   /**
    * @brief Less than operator, compares the position of two Mutation objects.

@@ -23,8 +23,8 @@
 
 #include "arg_node.hpp"
 
-Mutation::Mutation(ARGEdge* _edge, arg_real_t _position, arg_real_t _height, int _site_id)
-    : edge(_edge), position(_position), height(_height), site_id(_site_id) {
+Mutation::Mutation(ARGEdge* _edge, const arg_real_t _position, const arg_real_t _height, const int _site_id)
+    : position(_position), height(_height), edge(_edge), site_id(_site_id) {
 
   if (edge != nullptr) {
     assert(position < edge->end && position >= edge->start);

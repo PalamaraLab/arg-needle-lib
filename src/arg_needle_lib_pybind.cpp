@@ -125,7 +125,8 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def_readonly("edge", &Mutation::edge)
       .def_readonly("position", &Mutation::position)
       .def_readonly("height", &Mutation::height)
-      .def_readonly("site_id", &Mutation::site_id);
+      .def_readonly("site_id", &Mutation::site_id)
+      .def("get_midpoint_height", &Mutation::get_midpoint_height);
 
   py::class_<Site>(m, "Site")
       .def("get_mutations", &Site::get_mutations, py::return_value_policy::reference_internal)

@@ -59,6 +59,13 @@ public:
   Mutation(ARGEdge* _edge, arg_real_t _position, arg_real_t _height = -1.0, int _site_id = -1);
 
   /**
+   * @brief Calculate a height (age) estimate using the midpoint of the containing edge
+   * @return midpoint of the height of this mutation's child node height and parent node height, if the edge is valid
+   * @return -1.0 and print a warning, if ARGEdge* is nullptr
+   */
+  [[nodiscard]] arg_real_t get_midpoint_height() const;
+
+  /**
    * @brief Less than operator, compares the position of two Mutation objects.
    * @param other The other Mutation object to compare with.
    * @return true If position of this object is less than the other.

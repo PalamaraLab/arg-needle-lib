@@ -22,7 +22,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             arch: auto64
-            py-vers: cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
               dnf -y install epel-release
@@ -31,13 +31,13 @@ jobs:
             mdt: ""
           - os: macos-13
             arch: x86_64
-            py-vers: cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
             before-all: brew install cmake boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
             mdt: 13
           - os: macos-14
             arch: arm64
-            py-vers: cp39-* cp310-* cp311-* cp312-*
+            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
             before-all: brew install cmake boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
             mdt: 14
@@ -82,7 +82,7 @@ jobs:
           merge-multiple: true
           path: wheels
 
-      - uses: pypa/gh-action-pypi-publish@v1.10.1
+      - uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}

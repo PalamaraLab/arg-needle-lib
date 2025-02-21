@@ -23,8 +23,8 @@
 
 #include "arg_node.hpp"
 
-Mutation::Mutation(ARGEdge* _edge, arg_real_t _position, arg_real_t _height, int _site_id)
-    : edge(_edge), position(_position), height(_height), site_id(_site_id) {
+Mutation::Mutation(ARGEdge* _edge, const arg_real_t _position, const arg_real_t _height, const int _site_id)
+    : position(_position), height(_height), edge(_edge), site_id(_site_id) {
 
   if (edge != nullptr) {
     assert(position < edge->end && position >= edge->start);
@@ -34,4 +34,18 @@ Mutation::Mutation(ARGEdge* _edge, arg_real_t _position, arg_real_t _height, int
     }
   }
   // can't check that the site position is correct because that's stored in the ARG
+}
+
+arg_real_t Mutation::get_midpoint_height() const
+{
+  if (edge == nullptr) {
+    std::cout << "Warning: ARGEdge* is a nullptr: midpoint height estimate will be -1.0\n";
+    return arg_real_t{-1.0};
+  }
+
+  const arg_real_t lo = this->edge->child->height;
+  const arg_real_t hi = this->edge->parent->height;
+
+  // Safe(ish) midpoint in case these numbers are really large
+  return lo + (hi - lo) / 2.0;
 }

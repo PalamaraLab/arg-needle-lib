@@ -5,6 +5,7 @@
 ### Other changes
 
 - Resolve incompatibility preventing wheels being built for Python 3.13
+- Additionally, build wheels for Linux arm64. Can now `pip install arg-needle-lib` in Docker on arm64 Macbook, for example.
 
 ## v1.1.2 (2025-02-21)
 

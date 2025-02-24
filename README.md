@@ -79,6 +79,9 @@ or an example:
 - Push changes and check that all [GitHub workflows](https://github.com/PalamaraLab/arg_needle_lib/actions) pass
 - Tag the commit in Git using syntax `vX.Y.Z`
 - Make a release on GitHub, which should trigger a new build that will upload Python wheels to PyPI
+- If building wheels for a new Python version:
+  - Update classifiers in [pyproject.toml](pyproject.toml)
+  - Check whether version of `pypa/cibuildwheel` needs updating in [build-wheels.yml](.github/workflows/build-wheels.yml)
 
 ## License
 

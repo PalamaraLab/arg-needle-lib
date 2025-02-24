@@ -1,5 +1,11 @@
 # arg-needle-lib Release Notes
 
+## v1.1.3 (2025-02-24)
+
+### Other changes
+
+- Resolve incompatibility preventing wheels being built for Python 3.13
+
 ## v1.1.2 (2025-02-21)
 
 ### Other changes

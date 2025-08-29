@@ -206,6 +206,7 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def(
           "num_samples", [](const ARG& arg) { return arg.leaf_ids.size(); },
           "Return number of samples")
+      .def_readonly("aDNA_ids", &ARG::aDNA_ids)
       .def_readonly("leaf_ids", &ARG::leaf_ids)         // unsorted
       .def_readonly("sample_names", &ARG::sample_names) // unsorted
       .def("set_offset", &ARG::set_offset, py::arg("offset"))
@@ -214,7 +215,7 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def("get_mutation_sites", &ARG::get_mutation_sites, py::return_value_policy::reference)
       // A sorted list of physical positions
       .def("get_site_positions", &ARG::get_site_positions, py::return_value_policy::reference)
-      .def("add_sample", &ARG::add_sample, py::arg("sample_name") = "")
+      .def("add_sample", &ARG::add_sample, py::arg("sample_name") = "", py::arg("height_offset") = 0)
       .def("is_leaf", &ARG::is_leaf, py::arg("node_id"))
       .def("thread_sample", &ARG::thread_sample, py::arg("section_starts"), py::arg("sample_ids"),
            py::arg("heights"))

@@ -1042,7 +1042,7 @@ void ARG::check_mutations_sorted() const {
   }
 }
 
-int ARG::add_sample(string sample_name, arg_real_t height_offset) {
+int ARG::add_sample(string sample_name, arg_real_t height) {
   if (next_to_thread != -1) {
     throw std::logic_error(THROW_LINE("First thread the last added sample."));
   }
@@ -1060,9 +1060,14 @@ int ARG::add_sample(string sample_name, arg_real_t height_offset) {
   assert(arg_nodes.find(leaf_id) == arg_nodes.end());
 
   // create a new node for this sample
-  arg_nodes.insert(std::make_pair(leaf_id, std::make_unique<ARGNode>(leaf_id, height_offset, start, end)));
+  arg_nodes.insert(std::make_pair(leaf_id, std::make_unique<ARGNode>(leaf_id, height, start, end)));
   sample_names.insert({leaf_id, sample_name});
   leaf_ids.insert(leaf_id);
+  if (height > 0) {
+    // All leaf samples created in past are flagged as ancestral DNA
+    aDNA_ids.insert(leaf_id);
+  }
+
   ++threaded_samples;
   if (threaded_samples >= 2) {
     next_to_thread = leaf_id;
@@ -1113,10 +1118,6 @@ void ARG::thread_sample(vector<arg_real_t> section_starts, vector<int> sample_id
         throw std::invalid_argument(THROW_LINE("Threading heights must be larger than aDNA sample height"));
       }
     }
-    aDNA_ids.insert(leaf_to_thread->ID);
-#ifdef _DEBUG
-    cout << "Added aDNA sample at node " << leaf_to_thread->ID << "." << endl;
-#endif
   }
 
   // this used to be a queue, but I think stack is more intuitive

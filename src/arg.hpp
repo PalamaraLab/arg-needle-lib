@@ -138,7 +138,7 @@ public:
     bool is_leaf(int node_id) const;
 
     // height_offset defaults to 0 for current samples, non-zero for aDNA samples
-    int add_sample(std::string sample_name = "", arg_real_t height_offset = 0);
+    int add_sample(std::string sample_name = "", arg_real_t height = 0);
     void thread_sample(std::vector<arg_real_t> section_starts, std::vector<int> sample_ids,
                        std::vector<arg_real_t> heights);
     void populate_children_and_roots();

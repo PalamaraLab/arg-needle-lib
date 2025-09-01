@@ -8,7 +8,12 @@ def test_adna_volume():
     arg.thread_sample([0, 75], [0, 0], [4, 10])
     arg.add_sample("contemporary3")
     arg.thread_sample([0], [1], [1])
+
+    # Populate children with ARG validation checks (will throw in invalid)
+    arg.check_basic()
     arg.populate_children_and_roots()
+    arg.check_roots()
+    arg.check_children()
 
     # Generates the following ARG of contemporaneously sample individuals
     #     ┊   ┃  ┊     ┊   ┃  ┊
@@ -49,7 +54,12 @@ def test_adna_volume():
     arg.thread_sample([0, 25], [3, 1], [10, 3.5])
     arg.add_sample("aDNA3", 7)
     arg.thread_sample([0, 25, 50, 75], [4, 0, 3, 1], [8, 10, 9, 9])
+
+    # Populate children, also check that aDNA samples do not break validation
+    arg.check_basic()
     arg.populate_children_and_roots()
+    arg.check_roots()
+    arg.check_children()
 
     # Generates the following ARG of contemporaneously sample individuals
     # (where x denotes an aDNA sample)

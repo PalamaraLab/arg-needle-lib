@@ -134,7 +134,7 @@ int mutation_best(const ARG& arg, arg_real_t position, const std::vector<int>& g
 std::tuple<int, int, int> mutation_best_recurse(const ARGNode* node, arg_real_t position,
                                            int genotypes_num_zeros, const std::vector<int>& genotypes,
                                            bool random, std::mt19937& gen);
-Eigen::MatrixXd compute_grm(const ARG& arg, arg_real_t alpha = 0, int batch_size = 256,
+Eigen::MatrixXd compute_grm(const ARG& arg, arg_real_t alpha = -1, int batch_size = 256,
                             bool diploid = true, double min_maf = 0., double max_maf = 0.5);
 std::vector<std::vector<arg_real_t>> distance_matrix(const ARG& arg); // should this be Eigen?
 std::vector<std::vector<arg_real_t>> distance_matrix_v2(const ARG& arg, arg_real_t alpha = 0, arg_real_t from_pos = -1,

@@ -386,7 +386,7 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
         "Between-sample distance matrix in upper diagonal form");
   m.def("distance_matrix_v2", &arg_utils::distance_matrix_v2, py::arg("arg"), py::arg("alpha") = 0,
         py::arg("from_pos") = -1, py::arg("to_pos") = -1, "Between-sample distance matrix in upper diagonal form");
-  m.def("compute_grm", &arg_utils::compute_grm, py::arg("arg"), py::arg("alpha") = 0,
+  m.def("compute_grm", &arg_utils::compute_grm, py::arg("arg"), py::arg("alpha") = -1,
         py::arg("batch_size") = 256, py::arg("diploid") = true, py::arg("min_maf") = 0.,
         py::arg("max_maf") = 0.5, R"pbdoc(
           Compute GRM from existing mutations.

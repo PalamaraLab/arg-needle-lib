@@ -41,13 +41,13 @@ jobs:
           - os: macos-13
             arch: x86_64
             py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
-            before-all: brew install cmake boost eigen hdf5
+            before-all: brew install boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
             mdt: 13
           - os: macos-14
             arch: arm64
             py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
-            before-all: brew install cmake boost eigen hdf5
+            before-all: brew install boost eigen hdf5
             extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
             mdt: 14
 

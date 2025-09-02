@@ -104,6 +104,7 @@ public:
     int reserved_samples, threaded_samples = 0, next_general_id;
     std::unordered_map<int, std::unique_ptr<ARGNode>> arg_nodes{};
     std::unordered_map<int, std::string> sample_names;
+    std::unordered_set<int> aDNA_ids; // Ancestral DNA ids where sample height is not 0
     std::unordered_set<int> leaf_ids;
     std::map<arg_real_t, std::unique_ptr<Root>> roots;
 
@@ -135,7 +136,9 @@ public:
     void set_chromosome(int _chromosome);
     std::vector<std::unique_ptr<Mutation>>::const_iterator next_mutation(arg_real_t pos) const;
     bool is_leaf(int node_id) const;
-    int add_sample(std::string sample_name = "");
+
+    // height_offset defaults to 0 for current samples, non-zero for aDNA samples
+    int add_sample(std::string sample_name = "", arg_real_t height = 0);
     void thread_sample(std::vector<arg_real_t> section_starts, std::vector<int> sample_ids,
                        std::vector<arg_real_t> heights);
     void populate_children_and_roots();

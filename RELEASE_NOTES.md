@@ -1,5 +1,12 @@
 # arg-needle-lib Release Notes
 
+## v1.2.0 (2025-09-04)
+
+### Other changes
+
+- Add option to provide height value in `add_sample`. If omitted the height is set to 0 so original code behaves as normal.
+- Fixed `compute_grm` alpha argument default value from 0 to -1, as stated in the function's API docs.
+
 ## v1.1.3 (2025-02-24)
 
 ### Other changes

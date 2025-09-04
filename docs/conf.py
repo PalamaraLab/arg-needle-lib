@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath(os.path.join('..', '..')))
 project = 'arg-needle-lib'
 copyright = '2023-2024 ARG-Needle Developers'
 author = 'ARG-Needle Developers, https://palamaralab.github.io/software/argneedle/'
-release = 'v1.1.3'
+release = 'v1.2.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

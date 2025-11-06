@@ -172,7 +172,21 @@ size_t write_bitsets(const ARG& arg, std::string file_root = "", bool diploid = 
 // writes all branches, which contain many bitset repeats
 void write_branches(const ARG& arg, std::string file_root);
 
+void prepare_matmul(ARG& arg);
 
+Eigen::MatrixXd arg_matrix_multiply_samples(const ARG& arg, const Eigen::MatrixXd& mat, bool standardize_mut = false,
+    arg_real_t alpha = -1., bool diploid = true, arg_real_t start_pos = 0.,
+    arg_real_t end_pos = std::numeric_limits<arg_real_t>::infinity());
+Eigen::MatrixXd arg_matrix_multiply_samples_mt(const ARG& arg, const Eigen::MatrixXd& mat, bool standardize_mut = false,
+    arg_real_t alpha = -1., bool diploid = true, int n_threads = 1);
+
+Eigen::MatrixXd arg_matrix_multiply_muts(const ARG& arg, const Eigen::MatrixXd& in_mat, bool standardize_mut = false,
+    arg_real_t alpha = -1., bool diploid = true, arg_real_t start_pos = 0.,
+    arg_real_t end_pos = std::numeric_limits<arg_real_t>::infinity());
+Eigen::MatrixXd arg_matrix_multiply_muts_mt(const ARG& arg, const Eigen::MatrixXd& in_mat, bool standardize_mut = false,
+    arg_real_t alpha = -1., bool diploid = true, int n_threads = 1);
+
+Eigen::MatrixXd weighted_mut_squared_norm(const ARG& arg, const Eigen::MatrixXd& weights, bool centre = true);
 
 } // namespace arg_utils
 

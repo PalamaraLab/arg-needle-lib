@@ -22,7 +22,8 @@ jobs:
         include:
           - os: ubuntu-24.04
             arch: x86_64
-            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
+            py-vers-full: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+            py-vers-pr: cp311-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
               dnf -y install epel-release
@@ -31,28 +32,31 @@ jobs:
             mdt: ""
           - os: ubuntu-24.04-arm
             arch: aarch64
-            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
+            py-vers-full: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+            py-vers-pr: cp312-*
             before-all: |
               dnf -y install boost-devel eigen3-devel wget
               dnf -y install epel-release
               dnf -y install hdf5-devel
             extra-env: ""
             mdt: ""
-          - os: macos-13
+          - os: macos-15-intel
             arch: x86_64
-            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
+            py-vers-full: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+            py-vers-pr: cp313-*
             before-all: brew install boost eigen hdf5
-            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-            mdt: 13
+            extra-env: CC=clang CXX=clang++
+            mdt: 15.0
           - os: macos-14
             arch: arm64
-            py-vers: cp39-* cp310-* cp311-* cp312-* cp313-*
+            py-vers-full: cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*
+            py-vers-pr: cp314-*
             before-all: brew install boost eigen hdf5
-            extra-env: CC="$(brew --prefix llvm@15)/bin/clang" CXX="$(brew --prefix llvm@15)/bin/clang++" HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-            mdt: 14
+            extra-env: CC=clang CXX=clang++
+            mdt: 14.0
 
     env:
-      CIBW_BUILD: ${{ matrix.py-vers }}
+      CIBW_BUILD: ${{ github.event_name != 'pull_request' && matrix.py-vers-full || matrix.py-vers-pr }}
       CIBW_SKIP: cp3*-musllinux_*
       CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
@@ -65,12 +69,12 @@ jobs:
     steps:
 
       - name: checkout repo & submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22.0
+        uses: pypa/cibuildwheel@v3.2.0
 
       - uses: actions/upload-artifact@v4
         with:
@@ -86,13 +90,13 @@ jobs:
 
     steps:
       - name: Download wheels from cloud runners
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: wheels-cloud-*
           merge-multiple: true
           path: wheels
 
-      - uses: pypa/gh-action-pypi-publish@v1.12.4
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}

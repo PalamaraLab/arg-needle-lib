@@ -15,12 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import platform
 import pytest
 import msprime
 import numpy as np
 import arg_needle_lib
 
+@pytest.mark.skipif(platform.system() != "Linux", reason="msprime.simulate depends on platform")
 def test_kc2_tmrca_sv_stab():
     """Test that mutations are properly populated onto edges"""
     seed = 130222

@@ -53,6 +53,7 @@ if (PYTHON_BINDINGS)
             pybind11
             GIT_REPOSITORY https://github.com/pybind/pybind11
             GIT_TAG 7c33cdc2d39c7b99a122579f53bc94c8eb3332ff # Version 2.13.5
+
     )
     FetchContent_GetProperties(pybind11)
     if (NOT pybind11_POPULATED)
@@ -60,6 +61,26 @@ if (PYTHON_BINDINGS)
         add_subdirectory(${pybind11_SOURCE_DIR} ${pybind11_BINARY_DIR})
     endif ()
 endif ()
+
+include(FetchContent)
+FetchContent_Declare(
+  roaring
+  GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
+  GIT_TAG v4.4.2
+  GIT_SHALLOW TRUE
+)
+
+set(ENABLE_ROARING_TESTS OFF CACHE INTERNAL "")
+set(ROARING_BUILD_STATIC ON CACHE INTERNAL "")
+set(ROARING_BUILD_LTO OFF CACHE INTERNAL "")
+FetchContent_GetProperties(roaring)
+
+# Use FetchContent_Populate and add_subdirectory instead of FetchContent_MakeAvailable
+# to avoid copying roaring include headers and other install files into built wheel.
+FetchContent_Populate(roaring)
+add_subdirectory(${roaring_SOURCE_DIR} ${roaring_BINARY_DIR} EXCLUDE_FROM_ALL)
+target_compile_options(roaring PRIVATE -Wno-deprecated-declarations)
+set_target_properties(roaring PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
 add_subdirectory(src)
 add_subdirectory(example)

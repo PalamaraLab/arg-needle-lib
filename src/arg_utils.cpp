@@ -59,6 +59,8 @@ from the root of this repository.
 #include <unordered_set>
 #include <vector>
 
+#include "roaring/roaring.hh"
+
 using std::cout;
 using std::deque;
 using std::endl;
@@ -66,6 +68,8 @@ using std::ifstream;
 using std::list;
 using std::map;
 using std::pair;
+using std::priority_queue;
+using std::queue;
 using std::set;
 using std::stack;
 using std::string;
@@ -2019,24 +2023,29 @@ vector<tuple<int, arg_real_t, DescendantList>> stab_return_all_bitsets(const ARG
   return result;
 }
 
-// Return the DescendantList subtending a node at a given position
-// This currently uses recursion but can change to postorder using stacks
 DescendantList get_bitset(const ARGNode* node, int n, arg_real_t position) {
-  // Get the children of the particular node
-  vector<ARGEdge*> children_edges = node->children_at(position);
-  if (children_edges.size() == 0) {
-    assert(node->ID < n);
-    return DescendantList(n, node->ID);
-  }
-  DescendantList desc_list(n);
-  for (const ARGEdge* child_edge : children_edges) {
-    const ARGNode* child = child_edge->child;
 
-    DescendantList child_desc_list = get_bitset(child, n, position);
-    // Add in the descendent list of the child (recursive traversal)
-    desc_list.add(child_desc_list);
+  std::deque<const ARGNode*> deque_to_visit;
+  deque_to_visit.push_back(node);
+
+  DescendantList result(n);
+
+  while (!deque_to_visit.empty()) {
+    auto current_node = deque_to_visit.front();
+    deque_to_visit.pop_front();
+    vector<ARGEdge*> children_edges = current_node->children_at(position);
+    if (children_edges.size() == 0) {
+      assert(current_node->ID < n);
+      result.set(current_node->ID, true);
+    }
+    else
+    {
+      for (const auto child_edge : children_edges) {
+        deque_to_visit.push_back(child_edge->child);
+      }
+    }
   }
-  return (desc_list);
+  return result;
 }
 
 // Return the DescendantList subtending a mutation
@@ -3929,6 +3938,680 @@ void write_branches(const ARG& arg, string file_root) {
   samples_out_fstream.close();
   // close branch_info file stream
   info_out_fstream.close();
+}
+
+// build necessary information for arg traversal for multiplication
+
+void prepare_matmul(ARG &arg) {
+
+  if (arg.roots.empty()) {
+    throw std::logic_error(THROW_LINE("Call populate_children_and_roots() first."));
+  }
+
+  // required for traversal
+  arg.populate_mutations_on_edges();
+
+  // first we get the topological ordering of nodes
+
+  queue<int> topo_to_process; // nodes with zero incoming degree
+  unordered_map<int, int> node_desc_count;
+
+  for (auto &node_map_entry : arg.arg_nodes) {
+    if (!node_map_entry.second->parents.empty()) {
+      node_desc_count[node_map_entry.second->ID] =
+          node_map_entry.second->parents.size();
+    } else {
+      topo_to_process.push(node_map_entry.second->ID);
+    }
+  }
+
+  vector<int> topo_order;
+  topo_order.reserve(arg.num_nodes());
+  while (!topo_to_process.empty()) {
+    int current_node_id = topo_to_process.front();
+    topo_to_process.pop();
+    topo_order.emplace_back(current_node_id);
+    auto &current_node = arg.arg_nodes.at(current_node_id);
+    for (auto &entry : current_node->children_overlap(arg.start, arg.end)) {
+      int child_id = entry->child->ID;
+      node_desc_count.at(child_id) -= 1;
+      if (node_desc_count.at(child_id) == 0)
+        topo_to_process.push(child_id);
+    }
+  }
+  node_desc_count.clear();
+
+  // map split points for nodes, i.e. positions at which the descendant_list for a node changes.
+  std::unordered_map<int, std::set<arg_real_t>> node_id_to_split_points;
+  node_id_to_split_points.reserve(arg.num_nodes());
+  for (auto &node_entry : arg.arg_nodes)
+  {
+    auto node_id = node_entry.second->ID;
+    // sample nodes are not split so we write down the start and end of the arg
+    if (arg.is_leaf(node_id))
+    {
+      std::set<arg_real_t> leaf_node_map;
+      leaf_node_map.emplace(arg.start);
+      leaf_node_map.emplace(arg.end);
+      node_id_to_split_points.emplace(node_id, leaf_node_map);
+    }
+    else
+    {
+      std::set<arg_real_t> empty_node_map;
+      node_id_to_split_points.emplace(node_id, empty_node_map);
+    }
+  }
+
+  for (auto it = topo_order.rbegin(); it != topo_order.rend(); it++)
+  {
+    for (auto &parent_entry : arg.arg_nodes.at(*it)->parents)
+    {
+      auto p_start = parent_entry.second->start;
+      auto p_end = parent_entry.second->end;
+      auto p_id = parent_entry.second->parent->ID;
+      node_id_to_split_points.at(p_id).emplace(p_start);
+      node_id_to_split_points.at(p_id).emplace(p_end);
+      auto split_low = node_id_to_split_points.at(*it).lower_bound(p_start);
+      auto split_high = node_id_to_split_points.at(*it).upper_bound(p_end);
+      for (auto split_it = split_low; split_it != split_high; split_it++)
+      {
+        node_id_to_split_points.at(p_id).emplace(*split_it);
+      }
+    }
+  }
+
+  // next the mapping from mutation position to (external) mutation id
+  // we potentially have multiple mutations on the arg for one mapped variant, and they are correlated by their unique
+  // position on the genome.
+  // mutid here is the index on k for the external (pxk) input mat to be multiplied with the genotype.
+  map<arg_real_t, int> pos_to_mut_id;
+  int mutid = 0;
+  for (auto& entry : arg.get_mutations()) {
+    if (pos_to_mut_id.find(entry->position) == pos_to_mut_id.end()) {
+      pos_to_mut_id.emplace(entry->position, mutid);
+      mutid++;
+    }
+  }
+
+  // lastly we calculate the allele frequencies used for normalising the
+  // genotype matrix for now it is just a rehash of visit_mutation function...
+
+  unordered_map<int, pair<int, arg_real_t>> node_result_map;
+  priority_queue<pair<arg_real_t, int>, vector<pair<arg_real_t, int>>,
+                 std::greater<pair<arg_real_t, int>>>
+      expiration_pq;
+  stack<const ARGNode *> to_process;
+  stack<const ARGNode *> postorder;
+
+  for (int i : arg.leaf_ids) {
+    node_result_map.insert({i, std::make_pair(1, arg.end)});
+    expiration_pq.push(std::make_pair(arg.end, i));
+  }
+
+  int n_muts_included = arg.num_mutations();
+  int mut_index = 0;
+  Eigen::VectorXd allele_freq = Eigen::VectorXd::Zero(n_muts_included);
+  for (const std::unique_ptr<Mutation> &mutation_unique_ptr :
+       arg.get_mutations()) {
+    const Mutation *mutation = mutation_unique_ptr.get();
+    arg_real_t position = mutation->position;
+
+    while (!expiration_pq.empty() && expiration_pq.top().first <= position) {
+      node_result_map.erase(node_result_map.find(expiration_pq.top().second));
+      expiration_pq.pop();
+    }
+    if (node_result_map.find(mutation->edge->child->ID) ==
+        node_result_map.end()) {
+      to_process.push(mutation->edge->child);
+    }
+    while (!to_process.empty()) {
+      const ARGNode *node = to_process.top();
+      to_process.pop();
+      postorder.push(node);
+
+      for (const ARGEdge *child_edge : node->children_at(position)) {
+        const ARGNode *child_node = child_edge->child;
+        if (node_result_map.find(child_node->ID) == node_result_map.end()) {
+          to_process.push(child_node);
+        }
+      }
+    }
+    arg_real_t expire_position;
+    while (!postorder.empty()) {
+      const ARGNode *node = postorder.top();
+      postorder.pop();
+      expire_position = node->end;
+      vector<ARGEdge *> child_edges = node->children_at(position);
+      for (const ARGEdge *child_edge : child_edges) {
+        const ARGNode *child_node = child_edge->child;
+        arg_real_t child_descendants_expire =
+            node_result_map.at(child_node->ID).second;
+        expire_position = std::min(expire_position, child_descendants_expire);
+        expire_position = std::min(expire_position, child_edge->end);
+      }
+      vector<ARGEdge *> child_edges_stretch =
+          node->children_overlap(position, expire_position);
+      for (const ARGEdge *child_edge_stretch : child_edges_stretch) {
+        if (child_edge_stretch->start > position) {
+          expire_position =
+              std::min(expire_position, child_edge_stretch->start);
+        }
+      }
+      int node_descendant_count = 0;
+      for (const ARGEdge *child_edge : child_edges) {
+        const ARGNode *child_node = child_edge->child;
+        node_descendant_count += node_result_map.at(child_node->ID).first;
+      }
+      node_result_map.insert(
+          {node->ID, std::make_pair(node_descendant_count, expire_position)});
+      expiration_pq.push(std::make_pair(expire_position, node->ID));
+    }
+    allele_freq[mut_index] = node_result_map.at(mutation->edge->child->ID).first;
+    mut_index++;
+  }
+  node_result_map.clear();
+
+  // finally we add up the frequencies to account for variants represented by multiple mapped mutations
+  Eigen::VectorXd merged_allele_freq = Eigen::VectorXd::Zero(pos_to_mut_id.size());
+  auto& mut_vec = arg.get_mutations();
+  for (int idx=0;idx<allele_freq.size();idx++){
+    merged_allele_freq[pos_to_mut_id.at(mut_vec.at(idx)->position)] += allele_freq[idx];
+  }
+
+
+  // now assemble everything into the struct and attach to the arg object
+  FastMultiplicationData data;
+
+  data.allele_frequencies = merged_allele_freq;
+  data.topo_order = topo_order;
+  data.pos_to_mut_id = pos_to_mut_id;
+  data.node_id_to_split_points = node_id_to_split_points;
+  arg.fast_multiplication_data = data;
+
+  return;
+}
+
+// Multiply ARG transpose (samples x mutations) by a (mutations x k) matrix. Output is (samples x
+// k). No need for a fragmented arg.
+//
+// mat: matrix to multiply
+// alpha: will mean center and multiply by std^alpha
+//
+// note that if start and end positions are specified, the full in_mat is still required.
+// currently start_pos and end_pos should not be exposed in python api,
+// as this is only used in multithreading in such a way to avoid splitting the matrix
+// and reindexing mutations unnecessarily
+Eigen::MatrixXd arg_matrix_multiply_samples(const ARG& arg, const Eigen::MatrixXd& in_mat, bool standardize_mut,
+    arg_real_t alpha, bool diploid, arg_real_t start_pos, arg_real_t end_pos)
+{
+
+  size_t num_samples = arg.leaf_ids.size();
+  unsigned int num_mutations = arg.num_mutations();
+  unsigned int k = in_mat.cols();
+  auto in_mat_transposed = in_mat.transpose().eval();
+  if (diploid) {
+    assert(num_samples % 2 == 0);
+    num_samples /= 2;
+  }
+  if (arg.get_site_positions().size() != in_mat.rows()) {
+    cout << "Mutations are " << arg.get_site_positions().size() << " but vector size is " << in_mat.rows() << endl;
+    throw std::runtime_error(THROW_LINE("Mismatching mutations and matrix row sizes"));
+  }
+  if (arg.fast_multiplication_data.allele_frequencies.size() != arg.get_site_positions().size()) {
+      throw std::runtime_error(THROW_LINE("Mismatching index data. Re-run prepare_matmul(arg)."));
+  }
+  if (!diploid && standardize_mut) {
+    throw std::runtime_error(
+        THROW_LINE("Standardized haploid genotype is not yet implemented..."));
+  }
+
+  std::unordered_map<int, std::map<arg_real_t, Eigen::VectorXd>> node_interval_results;
+  node_interval_results.reserve(arg.num_nodes());
+  for (auto node_id : arg.fast_multiplication_data.topo_order)
+  {
+    node_interval_results.emplace(node_id, std::map<arg_real_t, Eigen::VectorXd>());
+
+    // no need to process nodes with no parents
+    if (arg.arg_nodes.at(node_id)->parents.empty())
+      continue;
+
+    auto &node_parents = arg.arg_nodes.at(node_id)->parents;
+
+    // we restrict the split position to the start and end positions
+    // but since split positions might not perfectly align with start and end, we do this roughly
+    auto &splits = arg.fast_multiplication_data.node_id_to_split_points.at(node_id);
+    auto last_split = splits.lower_bound(end_pos);
+    // need to backtrack one here since the ends are also included in node_id_to_split_points.
+    // we only need to include the start positions in iteration below
+    if (last_split == splits.end()) last_split--;
+    auto first_split = splits.lower_bound(start_pos);
+    // again go back by one to find a starting split no later than supplied start_pos.
+    if (first_split != splits.begin()) first_split--;
+
+    for (auto split_it = first_split; split_it != last_split; split_it++)
+    {
+      auto interval_left = *split_it;
+      split_it++;
+      auto interval_right = *split_it;
+      split_it--;
+      auto first_parent_edge_it = node_parents.upper_bound(interval_left);
+      if (first_parent_edge_it != node_parents.begin()) first_parent_edge_it--;
+
+      auto last_parent_edge_it = node_parents.lower_bound(interval_right);
+
+      // no need for this back track because last_parent_edge_it now points to the first edge *not* to be included.
+
+      Eigen::VectorXd this_interval_result = Eigen::VectorXd::Zero(k);
+
+      // sum up parent results for this interval
+      for (auto parent_it = first_parent_edge_it; parent_it != last_parent_edge_it; parent_it++)
+      {
+        // filter for only in-range edges...
+        if (parent_it->second->end <= interval_left) continue;
+        if (parent_it->second->end <= start_pos) continue;
+        assert(parent_it->second->start < interval_right);
+        assert(parent_it->second->end > interval_left);
+
+        // add results from mutations on this very edge
+        if (parent_it->second->mutations)
+        {
+          for (auto *mut : *parent_it->second->mutations)
+          {
+            if (interval_left <= mut->position && mut->position < interval_right &&
+                start_pos <= mut->position && mut->position < end_pos ) {
+            if (!standardize_mut)
+            this_interval_result += in_mat_transposed.col(arg.fast_multiplication_data.pos_to_mut_id.at(mut->position));
+            else {
+            arg_real_t mean = arg.fast_multiplication_data.allele_frequencies[arg.fast_multiplication_data.pos_to_mut_id.at(mut->position)] / arg.leaf_ids.size();
+            this_interval_result += std::pow(2 * mean * (1 - mean), alpha / 2.) * in_mat_transposed.col(arg.fast_multiplication_data.pos_to_mut_id.at(mut->position));
+          }
+            }
+          }
+        }
+
+        // for each parent node, seek the node interval results within the edge range and sum up
+        if (!node_interval_results.at(parent_it->second->parent->ID).empty())
+        {
+          auto result_begin_it = node_interval_results.at(parent_it->second->parent->ID).lower_bound(std::max(interval_left, parent_it->second->start));
+          if (result_begin_it != node_interval_results.at(parent_it->second->parent->ID).end()) {
+            assert(result_begin_it->first >= parent_it->second->start);
+          }
+          auto result_end_it = node_interval_results.at(parent_it->second->parent->ID).lower_bound(std::min(interval_right, parent_it->second->end));
+          // summing up...
+          for (auto result_it = result_begin_it; result_it != result_end_it; result_it++)
+          {
+            this_interval_result += result_it->second;
+          }
+        }
+      }
+      if (this_interval_result != Eigen::VectorXd::Zero(k) || arg.is_leaf(node_id))
+      {
+        node_interval_results.at(node_id).emplace(interval_left, this_interval_result);
+      }
+    }
+  }
+
+  Eigen::MatrixXd output = Eigen::MatrixXd::Zero(k, num_samples);
+  for (auto leaf_id : arg.leaf_ids) {
+    output.col(leaf_id / (diploid ? 2 : 1)) += node_interval_results.at(leaf_id).at(0);
+  }
+  if (standardize_mut) {
+    Eigen::ArrayXd mean_vec = arg.fast_multiplication_data.allele_frequencies / arg.leaf_ids.size();
+    Eigen::ArrayXd std = (2 * mean_vec * (1. - mean_vec)).pow(alpha / 2.);
+    mean_vec = 2 * mean_vec * std;
+    auto first_mut_id = arg.fast_multiplication_data.pos_to_mut_id.lower_bound(start_pos)->second;
+    auto last_mut_id = (--arg.fast_multiplication_data.pos_to_mut_id.upper_bound(end_pos))->second;
+    auto offset = in_mat_transposed.middleCols(first_mut_id, last_mut_id-first_mut_id+1) * mean_vec.matrix().middleRows(first_mut_id, last_mut_id-first_mut_id+1);
+    output.colwise() -= offset;
+  }
+  return output.transpose();
+}
+
+// Multiply ARG transpose (samples x mutations) by a (mutations x k) matrix. Output is (samples x
+// k). No need for a fragmented arg.
+//
+// mat: matrix to multiply
+// alpha: will mean center and multiply by std^alpha
+// this is a multi-threaded version that spawns threads calling the previous single-threaded function
+
+Eigen::MatrixXd arg_matrix_multiply_samples_mt(
+    const ARG& arg, const Eigen::MatrixXd& mat, bool standardize_mut, arg_real_t alpha, bool diploid, int n_threads)
+{
+
+  arg_real_t chunk_size = (arg.end - arg.start) / n_threads;
+
+  if (arg.fast_multiplication_data.allele_frequencies.size() != arg.get_site_positions().size()) {
+    throw std::runtime_error(THROW_LINE("Mismatching index data. Re-run prepare_matmul(arg)."));
+  }
+
+  std::vector<std::future<Eigen::MatrixXd>> result_chunks;
+  for (int i = 0; i < n_threads; i++) {
+    auto start_pos = arg.start + (i * chunk_size);
+    auto end_pos = arg.start + ((i + 1) * chunk_size);
+    assert(end_pos <= arg.end);
+    result_chunks.push_back(
+        std::async(std::launch::async,
+                   arg_utils::arg_matrix_multiply_samples,
+                   std::cref(arg), std::cref(mat), standardize_mut, alpha, diploid,
+                   start_pos, end_pos));
+  }
+
+  int col_offset = 0;
+  Eigen::MatrixXd final_out = Eigen::MatrixXd::Zero(diploid ? arg.leaf_ids.size() / 2 : arg.leaf_ids.size(), mat.cols());
+  for (auto &fut : result_chunks) {
+    auto this_chunk = fut.get();
+    final_out += this_chunk;
+  }
+  return final_out;
+}
+
+// Multiply existing mutations in the ARG by a k x sample matrix (output is k x mutations)
+// uses visit mutations function but in a recursion
+Eigen::MatrixXd arg_matrix_multiply_muts(const ARG& arg, const Eigen::MatrixXd& mat, bool standardize_mut,
+    arg_real_t alpha, bool diploid, arg_real_t start_pos, arg_real_t end_pos)
+{
+  size_t n = arg.leaf_ids.size();
+  if (arg.fast_multiplication_data.allele_frequencies.size() != arg.get_site_positions().size()) {
+    throw std::runtime_error(THROW_LINE("Mismatching index data. Re-run arg_needle_prepare_fast_multiplication(arg)."));
+  }
+  if (diploid) {
+    if (n != mat.cols() * 2) {
+      cout << "Samples are " << n << " but vector size is 2 * " << mat.cols() << endl;
+      throw std::runtime_error(THROW_LINE("Mismatching sample and vector sizes"));
+    }
+  } else {
+    if (n != mat.cols()) {
+      cout << "Samples are " << n << " but vector size is " << mat.cols() << endl;
+      throw std::runtime_error(THROW_LINE("Mismatching sample and vector sizes"));
+    }
+    if (standardize_mut) {
+      throw std::runtime_error(
+          THROW_LINE("Standardized haploid genotype is not yet implemented..."));
+    }
+  }
+
+  long int k = mat.rows();
+  Eigen::VectorXd mat_row_sum = mat.rowwise().sum();
+
+  // Visit mutations
+  std::unordered_map<int, pair<Eigen::VectorXd, arg_real_t>> node_result_map;
+  std::priority_queue<pair<arg_real_t, int>, vector<pair<arg_real_t, int>>,
+                      std::greater<pair<arg_real_t, int>>>
+      expiration_pq;
+  stack<const ARGNode*> to_process;
+  stack<const ARGNode*> postorder;
+
+  // Fill in the base case for the leaf ARGNodes
+  for (int i : arg.leaf_ids) {
+    Eigen::VectorXd leaf_result = diploid ? mat.col(i / 2) : mat.col(i);
+    node_result_map.insert({i, std::make_pair(leaf_result, arg.end)});
+    expiration_pq.push(std::make_pair(arg.end, i));
+  }
+
+  // Iterate over all mutations, which are sorted in increasing order by position
+  // TODO: can add start / end conditions here using arg.next_mutation
+  int mut_index = 0;
+
+  // need to figure out how many mutations are in range and how to offset the allele count lookup
+  int num_mut_in_range = 0;
+  int site_lookup_offset = 0;
+
+  for (const auto& site_pos : arg.get_site_positions()) {
+    if (site_pos < start_pos) site_lookup_offset++;
+    if (site_pos >= start_pos && site_pos < end_pos) num_mut_in_range++;
+  }
+
+  Eigen::MatrixXd result = Eigen::MatrixXd::Zero(k, num_mut_in_range);
+  for (const std::unique_ptr<Mutation>& mutation_unique_ptr : arg.get_mutations()) {
+    const Mutation* mutation = mutation_unique_ptr.get();
+    arg_real_t position = mutation->position;
+
+    // skip mutations not in range
+    if (position < start_pos || position >= end_pos) continue;
+
+    // Expire any DescendantLists ending at or before this position
+    while (!expiration_pq.empty() && expiration_pq.top().first <= position) {
+      // node_descendants_map.erase(node_descendants_map.find(expiration_pq.top().second));
+      node_result_map.erase(node_result_map.find(expiration_pq.top().second));
+      expiration_pq.pop();
+    }
+
+    // Generate a postorder going up to this mutation using the two stacks method
+    // https://www.geeksforgeeks.org/iterative-postorder-traversal/
+    // The termination condition for this top-down search is nodes in the node_descendants_map
+    if (node_result_map.find(mutation->edge->child->ID) == node_result_map.end()) {
+      to_process.push(mutation->edge->child);
+    }
+    while (!to_process.empty()) {
+      const ARGNode* node = to_process.top();
+      to_process.pop();
+      postorder.push(node);
+
+      for (const ARGEdge* child_edge : node->children_at(position)) {
+        const ARGNode* child_node = child_edge->child;
+        if (node_result_map.find(child_node->ID) == node_result_map.end()) {
+          to_process.push(child_node);
+        }
+      }
+    }
+
+    // Process each node in the postorder by visiting its children edges.
+    // Each child will already have been filled into node_descendants_map
+    arg_real_t expire_position;
+    while (!postorder.empty()) {
+      const ARGNode* node = postorder.top();
+      postorder.pop();
+
+      // We need to figure out when this node's DescendantList, which is being
+      // filled in, will expire. The expiration position is the minimum of the
+      // node end, the edge end for all child edges, and the child expiration
+      // position for all children.
+      expire_position = node->end;
+      vector<ARGEdge*> child_edges = node->children_at(position);
+      for (const ARGEdge* child_edge : child_edges) {
+        const ARGNode* child_node = child_edge->child;
+        arg_real_t child_descendants_expire = node_result_map.at(child_node->ID).second;
+        expire_position = std::min(expire_position, child_descendants_expire);
+        expire_position = std::min(expire_position, child_edge->end);
+      }
+      // New code for handling tsinfer case
+      // The branch doesn't only expire when the first child branch expires
+      // It also expires if a new child edge enters
+      // This code is not necessary for ARGs that consist only of binary trees,
+      // but the Python test test_tsinfer_visit gives an example where it is necessary
+      vector<ARGEdge*> child_edges_stretch = node->children_overlap(position, expire_position);
+      for (const ARGEdge* child_edge_stretch : child_edges_stretch) {
+        if (child_edge_stretch->start > position) {
+          expire_position = std::min(expire_position, child_edge_stretch->start);
+        }
+      }
+      // Create this ARGNode's node_descendants
+      Eigen::VectorXd node_result = Eigen::VectorXd::Zero(k);
+      int node_descendant_count = 0;
+      for (const ARGEdge* child_edge : child_edges) {
+        const ARGNode* child_node = child_edge->child;
+        Eigen::VectorXd child_result = node_result_map.at(child_node->ID).first;
+        node_result += child_result;
+      }
+      node_result_map.insert(
+          {node->ID,
+           std::make_pair(node_result, expire_position)});
+      expiration_pq.push(std::make_pair(expire_position, node->ID));
+    }
+    if (!standardize_mut) {
+      Eigen::VectorXd node_result = node_result_map.at(mutation->edge->child->ID).first;
+      int external_mut_id = arg.fast_multiplication_data.pos_to_mut_id.at(position);
+      result.col(external_mut_id - site_lookup_offset) += node_result;
+    }
+    else {
+      Eigen::VectorXd node_result = node_result_map.at(mutation->edge->child->ID).first;
+      int external_mut_id = arg.fast_multiplication_data.pos_to_mut_id.at(position);
+      int node_descendant_count = arg.fast_multiplication_data.allele_frequencies[external_mut_id];
+      arg_real_t mean = (arg_real_t)node_descendant_count / n;
+      arg_real_t std = std::sqrt(2 * mean * (1 - mean));
+      node_result *= std::pow(std, alpha);
+      result.col(external_mut_id - site_lookup_offset) += node_result;
+    }
+    mut_index++;
+  }
+  if (standardize_mut)
+  {
+    Eigen::ArrayXd means =
+        arg.fast_multiplication_data.allele_frequencies.segment(site_lookup_offset, num_mut_in_range).array() / n;
+    Eigen::ArrayXd stds = (2 * means.array() * (1 - means.array())).sqrt().pow(alpha);
+    result -= 2 * mat_row_sum * ((means * stds).matrix().transpose());
+  }
+  return result;
+}
+
+// Multiply existing mutations in the ARG by a k x sample matrix (output is k x mutations)
+// uses visit mutations function but in a recursion
+// this is a multi-threaded version that spawns threads calling the previous single-threaded function
+Eigen::MatrixXd arg_matrix_multiply_muts_mt(
+    const ARG& arg, const Eigen::MatrixXd& mat, bool standardize_mut, arg_real_t alpha, bool diploid, int n_threads)
+{
+
+  arg_real_t chunk_size = (arg.end - arg.start) / n_threads;
+  std::vector<std::future<Eigen::MatrixXd>> result_chunks;
+  for (int i = 0; i < n_threads; i++) {
+    auto start_pos = arg.start + (i * chunk_size);
+    auto end_pos = arg.start + ((i + 1) * chunk_size);
+    result_chunks.push_back(
+        std::async(std::launch::async,
+                   arg_utils::arg_matrix_multiply_muts,
+                   std::cref(arg), std::cref(mat), standardize_mut, alpha, diploid,
+                   start_pos, end_pos));
+  }
+
+  int col_offset = 0;
+  Eigen::MatrixXd final_out =
+      Eigen::MatrixXd::Zero(mat.rows(), arg.num_mutations());
+  for (auto &fut : result_chunks) {
+    auto this_chunk = fut.get();
+    auto n_muts = this_chunk.cols();
+    final_out.middleCols(col_offset, n_muts) = this_chunk;
+    col_offset += n_muts;
+  }
+  return final_out;
+}
+
+Eigen::MatrixXd weighted_mut_squared_norm(const ARG& arg, const Eigen::MatrixXd& weights, bool centre) {
+  if (arg.roots.empty()) {
+    throw std::logic_error(THROW_LINE("Call populate_children_and_roots() first."));
+  }
+  if (arg.get_mutations().empty()) {
+    std::cout << "No mutations found; did you forget to call generate_mutations_and_keep?" << std::endl;
+  }
+  if (weights.rows() != arg.leaf_ids.size()/2) {
+    throw std::logic_error(THROW_LINE("number of individuals != number of weights"));
+  }
+  Eigen::MatrixXd squared_norms = Eigen::MatrixXd::Zero(arg.num_mutations(), weights.cols());
+  auto sum_w = weights.colwise().sum();
+  unordered_map<int, pair<pair<roaring::Roaring, roaring::Roaring>, arg_real_t>> node_result_map;
+  priority_queue<pair<arg_real_t, int>, vector<pair<arg_real_t, int>>,
+                 std::greater<pair<arg_real_t, int>>>
+      expiration_pq;
+  stack<const ARGNode *> to_process;
+  stack<const ARGNode *> postorder;
+
+  for (int i : arg.leaf_ids) {
+    roaring::Roaring is_carrier;
+    is_carrier.add(i/2);
+    roaring::Roaring is_hetero_carrier;
+    is_hetero_carrier.add(i/2);
+    node_result_map.insert({i, std::make_pair(std::make_pair(is_carrier, is_hetero_carrier), arg.end)});
+    expiration_pq.push(std::make_pair(arg.end, i));
+  }
+
+  int mut_index = 0;
+
+  for (const std::unique_ptr<Mutation> &mutation_unique_ptr :
+       arg.get_mutations()) {
+    const Mutation *mutation = mutation_unique_ptr.get();
+    arg_real_t position = mutation->position;
+
+    while (!expiration_pq.empty() && expiration_pq.top().first <= position) {
+      node_result_map.erase(node_result_map.find(expiration_pq.top().second));
+      expiration_pq.pop();
+    }
+    if (node_result_map.find(mutation->edge->child->ID) ==
+        node_result_map.end()) {
+      to_process.push(mutation->edge->child);
+    }
+    while (!to_process.empty()) {
+      const ARGNode *node = to_process.top();
+      to_process.pop();
+      postorder.push(node);
+
+      for (const ARGEdge *child_edge : node->children_at(position)) {
+        const ARGNode *child_node = child_edge->child;
+        if (node_result_map.find(child_node->ID) == node_result_map.end()) {
+          to_process.push(child_node);
+        }
+      }
+    }
+    arg_real_t expire_position;
+    while (!postorder.empty()) {
+      const ARGNode *node = postorder.top();
+      postorder.pop();
+      expire_position = node->end;
+      vector<ARGEdge *> child_edges = node->children_at(position);
+      for (const ARGEdge *child_edge : child_edges) {
+        const ARGNode *child_node = child_edge->child;
+        arg_real_t child_descendants_expire =
+            node_result_map.at(child_node->ID).second;
+        expire_position = std::min(expire_position, child_descendants_expire);
+        expire_position = std::min(expire_position, child_edge->end);
+      }
+      vector<ARGEdge *> child_edges_stretch =
+          node->children_overlap(position, expire_position);
+      for (const ARGEdge *child_edge_stretch : child_edges_stretch) {
+        if (child_edge_stretch->start > position) {
+          expire_position =
+              std::min(expire_position, child_edge_stretch->start);
+        }
+      }
+      roaring::Roaring node_is_carrier;
+      roaring::Roaring node_het_carrier;
+      for (const ARGEdge *child_edge : child_edges) {
+        const ARGNode *child_node = child_edge->child;
+        node_is_carrier |= node_result_map.at(child_node->ID).first.first;
+        node_het_carrier ^= node_result_map.at(child_node->ID).first.second;
+      }
+      node_result_map.insert(
+          {node->ID, std::make_pair(std::make_pair(node_is_carrier, node_het_carrier), expire_position)});
+      expiration_pq.push(std::make_pair(expire_position, node->ID));
+    }
+    auto& is_carrier = node_result_map.at(mutation->edge->child->ID).first.first;
+    auto& het_carrier = node_result_map.at(mutation->edge->child->ID).first.second;
+    if (centre) {
+      double mean = (double) (is_carrier.cardinality()*2 - het_carrier.cardinality()) / (double) (arg.leaf_ids.size()/2);
+
+      squared_norms.row(mut_index) += sum_w * mean * mean;
+      for (auto indv = is_carrier.begin(); indv != is_carrier.end(); indv++) {
+        if (het_carrier.contains(*indv)) {
+          squared_norms.row(mut_index) += weights.row(*indv) * (1 - 2*mean);
+        }
+        else {
+          squared_norms.row(mut_index) += weights.row(*indv) * (4 - 4*mean);
+        }
+      }
+    }
+    else {
+      for (auto indv = is_carrier.begin(); indv != is_carrier.end(); indv++) {
+        if (het_carrier.contains(*indv)) {
+          squared_norms.row(mut_index) += weights.row(*indv);
+        }
+        else {
+          squared_norms.row(mut_index) += weights.row(*indv)*4;
+        }
+      }
+    }
+    mut_index++;
+  }
+  node_result_map.clear();
+
+  return squared_norms;
 }
 
 } // namespace arg_utils

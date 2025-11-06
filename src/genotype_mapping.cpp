@@ -129,9 +129,11 @@ void arg_utils::map_genotypes_to_ARG(
 
   for (const auto& result : all_results) {
     for (const auto& [edge, pos] : result) {
-      arg.add_mutation(edge, pos);
+      // do not update mutation metadata here
+      arg.add_mutation(edge, pos, -1.0, -1, false);
     }
   }
+  arg.update_site_data_structures();
 }
 
 std::tuple<std::vector<ARGEdge*>, double> arg_utils::map_genotype_to_ARG_approximate(

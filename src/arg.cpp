@@ -1406,3 +1406,30 @@ void ARG::update_site_positions() const
     site_positions_up_to_date = true;
   }
 }
+
+// Keep mutations with maf between the min and max thresholds, and drop those with maf outside.
+// Ends are inclusive
+void ARG::keep_mutations_within_maf(arg_real_t min_maf, arg_real_t max_maf, bool verbose)
+{
+  if (fast_multiplication_data.allele_frequencies.size() != this->num_mutations()) {
+    throw std::runtime_error(THROW_LINE("Mismatching allele freq data. Re-run prepare_matmul(arg)."));
+  }
+  if (verbose) {
+    std::cout << "Filtering " << this->num_mutations() << " mutations in maf range [" << min_maf << ", " << max_maf << "]\n";
+  }
+  std::vector<std::unique_ptr<Mutation>> filtered_muts;
+  for (int i = 0; i < this->num_mutations(); i++) {
+    arg_real_t af = fast_multiplication_data.allele_frequencies[i];
+    arg_real_t maf = af / leaf_ids.size();
+    if ((min_maf <= maf && maf <= max_maf) || (min_maf <= (1 - maf) && (1 - maf) <= max_maf)) {
+      filtered_muts.push_back(std::move(mutations.at(i)));
+    }
+  }
+  if (verbose) {
+    std::cout << "Keeping " << filtered_muts.size() << " mutations." << std::endl;
+  }
+  mutations = std::move(filtered_muts);
+  site_positions_up_to_date = false;
+  mutation_sites_up_to_date = false;
+  update_site_data_structures();
+}

@@ -18,7 +18,7 @@ jobs:
     steps:
 
       - name: checkout repo & submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: install system packages
         run: |
@@ -54,4 +54,8 @@ jobs:
 
       - name: run example visit
         run: ./example/example_visit
+        working-directory: build_dir
+
+      - name: run example sumstats
+        run: ./example/example_sumstats
         working-directory: build_dir

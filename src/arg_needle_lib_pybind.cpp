@@ -172,6 +172,10 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def_readonly("offset", &ARG::offset)                     // set using set_offset
       .def_readonly("chromosome", &ARG::chromosome)             // set using set_chromosome
       .def_readonly("reserved_samples", &ARG::reserved_samples) // set using constructors
+      .def("allele_freq", [](const ARG& arg) {
+            return arg.fast_multiplication_data.allele_frequencies;
+          },
+          py::return_value_policy::reference, "Get propagated allele frequencies")
       .def(
           "node",
           [](const ARG& arg, int ID) {
@@ -254,12 +258,15 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
       .def("get_idx_of_mutation_closest_to", &ARG::get_idx_of_mutation_closest_to,
            py::arg("physical_pos"))
       .def("clear_mutations", &ARG::clear_mutations)
-      .def("clear_mutations_from_edges", &ARG::clear_mutations_from_edges);
+      .def("clear_mutations_from_edges", &ARG::clear_mutations_from_edges)
+      .def("keep_mutations_within_maf", &ARG::keep_mutations_within_maf, py::arg("min_maf") = 0.,
+           py::arg("max_maf") = 1., py::arg("verbose") = true);
 
   py::class_<DescendantList>(m, "DescendantList")
       .def_static(
           "set_threshold", &DescendantList::set_threshold, "Set threshold", py::arg("threshold"))
       .def_static("print_threshold", &DescendantList::print_threshold, "Print threshold");
+
 
   // arg_utils: general ARG querying
   m.def("arg_to_newick", &arg_utils::arg_to_newick, py::arg("arg"), py::arg("verbose") = false,
@@ -476,40 +483,101 @@ PYBIND11_MODULE(arg_needle_lib_pybind, m) {
   m.def("time_efficient_visit", &arg_utils::time_efficient_visit, py::arg("arg"),
         py::arg("timing") = false, "Time efficient visit routine");
 
-    // Functions for genotype mapping
-    m.def("map_genotype_to_ARG", &arg_utils::map_genotype_to_ARG, py::arg("arg"),
-          py::arg("genotype"), py::arg("pos"), "Maps a genotype to an ARG");
-    m.def("map_genotypes_to_ARG", &arg_utils::map_genotypes_to_ARG, py::arg("arg"),
-          py::arg("genotypes"), py::arg("positions"), py::arg("num_tasks") = std::nullopt, "Maps many genotype to an ARG");
-    m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"),
-          py::arg("genotype"), py::arg("site_id"), "Maps a diploid genotype to an ARG");
-    m.def("map_genotype_to_ARG_approximate",
-          [](ARG &arg, const std::vector<int> &genotype, arg_real_t pos) {
-              auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos);
-              std::vector<ARGEdge> edges;
-              for (const auto edge: std::get<0>(result)) {
-                  edges.push_back(*edge);
-              }
-              return py::make_tuple(edges, std::get<1>(result));
-          }, py::arg("arg"), py::arg("genotype"), py::arg("pos"),
-          "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
-    m.def("most_recent_common_ancestor",
-          [](ARG &arg, std::vector<int> descendants, double position) {
-              if (descendants.empty()) {
-                  throw std::runtime_error(THROW_LINE("Descendants list cannot be empty"));
-              }
-              DescendantList desc(arg.leaf_ids.size(), descendants.at(0));
-              for (int i = 1; i < descendants.size(); i++) {
-                  desc.set(descendants.at(i), true);
-              }
-              return arg_utils::most_recent_common_ancestor(arg, desc, position);
-          },
-          py::return_value_policy::reference, py::arg("arg"), py::arg("descendants"), py::arg("position"),
-          "Finds the most recent common ancestor of a set of descendants in an ARG at a specific position.");
+  // Functions for genotype mapping
+  m.def("map_genotype_to_ARG", &arg_utils::map_genotype_to_ARG, py::arg("arg"), py::arg("genotype"), py::arg("pos"),
+      "Maps a genotype to an ARG");
+  m.def("map_genotypes_to_ARG", &arg_utils::map_genotypes_to_ARG, py::arg("arg"), py::arg("genotypes"),
+      py::arg("positions"), py::arg("num_tasks") = std::nullopt, "Maps many genotype to an ARG");
+  m.def("map_genotype_to_ARG_diploid", &arg_utils::map_genotype_to_ARG_diploid, py::arg("arg"), py::arg("genotype"),
+      py::arg("site_id"), "Maps a diploid genotype to an ARG");
+  m.def(
+      "map_genotype_to_ARG_approximate",
+      [](ARG& arg, const std::vector<int>& genotype, arg_real_t pos) {
+        auto result = arg_utils::map_genotype_to_ARG_approximate(arg, genotype, pos);
+        std::vector<ARGEdge> edges;
+        for (const auto edge : std::get<0>(result)) {
+          edges.push_back(*edge);
+        }
+        return py::make_tuple(edges, std::get<1>(result));
+      },
+      py::arg("arg"), py::arg("genotype"), py::arg("pos"),
+      "Maps a genotype to an ARG approximately, based on allele counts and frequencies.");
+  m.def(
+      "most_recent_common_ancestor",
+      [](ARG& arg, std::vector<int> descendants, double position) {
+        if (descendants.empty()) {
+          throw std::runtime_error(THROW_LINE("Descendants list cannot be empty"));
+        }
+        DescendantList desc(arg.leaf_ids.size(), descendants.at(0));
+        for (int i = 1; i < descendants.size(); i++) {
+          desc.set(descendants.at(i), true);
+        }
+        return arg_utils::most_recent_common_ancestor(arg, desc, position);
+      },
+      py::return_value_policy::reference, py::arg("arg"), py::arg("descendants"), py::arg("position"),
+      "Finds the most recent common ancestor of a set of descendants in an ARG at a specific position.");
 
-    // serialize_arg: ARG serialization to HDF5
-    m.def("validate_serialized_arg", &arg_utils::validate_serialized_arg, py::arg("file_name"),
-        "Validates the integrity of a serialized ARG file.");
-    m.def("deserialize_arg", &arg_utils::deserialize_arg, py::arg("file_name"), py::arg("chunk_size") = 1000,
-        py::arg("reserved_samples") = -1, "Deserialize ARG from HDF5 file.");
+  // serialize_arg: ARG serialization to HDF5
+  m.def("validate_serialized_arg", &arg_utils::validate_serialized_arg, py::arg("file_name"),
+      "Validates the integrity of a serialized ARG file.");
+  m.def("deserialize_arg", &arg_utils::deserialize_arg, py::arg("file_name"), py::arg("chunk_size") = 1000,
+      py::arg("reserved_samples") = -1, "Deserialize ARG from HDF5 file.");
+
+  m.def("prepare_matmul", &arg_utils::prepare_matmul, py::arg("arg"),
+      R"pbdoc(
+        Prepare ARG for fast matrix multiplication operations.
+
+        Args:
+            arg: ARG object to prepare for multiplication
+    )pbdoc");
+
+  m.def(
+      "arg_matmul",
+      [](const ARG& arg, const Eigen::MatrixXd& mat, std::string axis, bool standardize, arg_real_t alpha, bool diploid,
+          arg_real_t start_pos, arg_real_t end_pos, int n_threads) -> Eigen::MatrixXd {
+        // Validate axis
+        const bool axis_mutations = (axis == "mutations");
+        if (!axis_mutations) {
+          if (axis != "samples") {
+            throw std::runtime_error(THROW_LINE("arg_matmul only supports 'mutations' and 'samples' axis values"));
+          }
+        }
+
+        // Validate threads and delegate to appropriate mul method
+        if (n_threads > 1) {
+          if ((start_pos != 0) || (end_pos != std::numeric_limits<double>::infinity())) {
+            throw std::runtime_error(THROW_LINE("arg_matmul cannot specify start_pos or end_pos when running multithreaded"));
+          }
+          if (axis_mutations) {
+            return arg_utils::arg_matrix_multiply_muts_mt(arg, mat, standardize, alpha, diploid, n_threads);
+          } else {
+            return arg_utils::arg_matrix_multiply_samples_mt(arg, mat, standardize, alpha, diploid, n_threads);
+          }
+        } else {
+          if (axis_mutations) {
+            return arg_utils::arg_matrix_multiply_muts(arg, mat, standardize, alpha, diploid, start_pos, end_pos);
+          } else {
+            return arg_utils::arg_matrix_multiply_samples(arg, mat, standardize, alpha, diploid, start_pos, end_pos);
+          }
+        }
+      },
+      py::arg("arg"), py::arg("matrix"), py::arg("axis") = "mutations", py::arg("standardize") = false,
+      py::arg("alpha") = 0, py::arg("diploid") = false, py::arg("start_pos") = 0, py::arg("end_pos") = std::numeric_limits<double>::infinity(),
+      py::arg("n_threads") = 1,
+      R"pbdoc(
+          Multiply the genotype matrix on the ARG by a k-by-sample matrix.
+
+          Args:
+              arg: ARG object containing mutations
+              matrix: k-by-sample numpy matrix to multiply
+              axis: specify whether matrix contains mutations or samples
+              standardize: whether to standardize mutations before multiplication (default: False)
+              alpha: standardize genotypes by multiplying std^alpha (default: 0)
+              diploid: whether to treat samples as diploid (default: False)
+              start_pos: start position to consider mutations from (default: 0)
+              end_pos: snd position to consider mutations to (default: infinity)
+              n_threads: split operation over multiple threads, does not support start_pos or end_pos (default: 1)
+          Returns:
+              A k-by-mutations matrix from multiplying the provided input with the genotype matrix
+      )pbdoc");
 }

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import platform
 import pytest
 import msprime
 import arg_needle_lib
@@ -202,6 +202,7 @@ def test_map_diploid_genotypes_small():
         arg_needle_lib.map_genotype_to_ARG(arg, [2, 2, 2], 4)
 
 
+@pytest.mark.skipif(platform.system() != "Linux", reason="msprime.simulate depends on platform")
 def test_map_genotypes_approximate():
     """Test that input genotypes are correctly converted to mutations on edges"""
     seed = 130222
@@ -229,8 +230,6 @@ def test_map_genotypes_approximate():
     arg = arg_needle_lib.tskit_to_arg(ts)
     positions = [.1, .2, .3, .4, .5]
     arg.populate_children_and_roots()
-    # import pdb
-    # pdb.set_trace()
     genotype1 = [1, 0, 1, 0, 1, 0, 0, 1, 1, 0]
     map1, _ = arg_needle_lib.map_genotype_to_ARG_approximate(arg, genotype1, positions[0])
     assert len(map1) == 0
@@ -245,6 +244,7 @@ def test_map_genotypes_approximate():
     assert len(map4) == 2
 
 
+@pytest.mark.skipif(platform.system() != "Linux", reason="msprime.simulate depends on platform")
 def test_mrca():
     seed = 130222
     ts = msprime.simulate(sample_size=10, random_seed=seed)
@@ -270,8 +270,6 @@ def test_mrca():
     #     0                     1
     arg = arg_needle_lib.tskit_to_arg(ts)
     arg.populate_children_and_roots()
-    # import pdb
-    # pdb.set_trace()
     mrca1 = arg_needle_lib.most_recent_common_ancestor(arg, [0, 8, 7], 0.1)
     assert mrca1.ID == 13
     mrca2 = arg_needle_lib.most_recent_common_ancestor(arg, [0, 8], 0.1)

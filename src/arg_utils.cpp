@@ -4312,7 +4312,7 @@ Eigen::MatrixXd arg_matrix_multiply_muts(const ARG& arg, const Eigen::MatrixXd& 
 {
   size_t n = arg.leaf_ids.size();
   if (arg.fast_multiplication_data.allele_frequencies.size() != arg.get_site_positions().size()) {
-    throw std::runtime_error(THROW_LINE("Mismatching index data. Re-run arg_needle_prepare_fast_multiplication(arg)."));
+    throw std::runtime_error(THROW_LINE("Mismatching index data. Re-run prepare_matmul(arg)."));
   }
   if (diploid) {
     if (n != mat.cols() * 2) {

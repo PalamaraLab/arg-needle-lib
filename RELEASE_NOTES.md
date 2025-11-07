@@ -1,5 +1,13 @@
 # arg-needle-lib Release Notes
 
+## v1.2.1 (2025-10-07)
+
+### Other changes
+
+- ARG-RHE and ARG matrix multiplication routines.
+- Use cibuildwheel default folder structure.
+- Deploy for latest macos targets as GitHub macos 13 has been retired.
+
 ## v1.2.0 (2025-09-04)
 
 ### Other changes

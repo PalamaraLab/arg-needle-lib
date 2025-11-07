@@ -1,0 +1,27 @@
+name: "Code quality checks"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  qa-checks:
+    name: Python tests
+    runs-on: ubuntu-22.04
+    if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+
+      - name: Run version consistency check
+        run: |
+          python .github/workflows/check-version.py

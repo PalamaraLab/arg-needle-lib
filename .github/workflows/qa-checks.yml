@@ -14,15 +14,14 @@ jobs:
     runs-on: ubuntu-22.04
     if:  ${{ github.event_name == 'pull_request' || github.repository == 'PalamaraLab/arg-needle-lib' }}
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v5
 
-      - name: set up Python
+      - name: Set up Python
         uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
 
-      - name: display Python version
-        run: python --version
-
-      - name: run version consistency check
+      - name: Run version consistency check
         run: |
           python .github/workflows/check-version.py
